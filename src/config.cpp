@@ -1,5 +1,6 @@
 #include<regex.h>
 #include<stdio.h>
+#include<stdlib.h>
 #include<string.h>
 #include"config.h"
 #include"datatype.h"
@@ -215,11 +216,11 @@ Int32 Parser::analyse() {
     Int32 peerPort = 0;
     
     len = strnlen(DEF_GATEWAY_SEC_PRE, MAX_LINE_LEN);
-    strncpy(sec, DEF_GATEWAY_SEC_PRE, len);
+    strncpy(sec, DEF_GATEWAY_SEC_PRE, len + 1);
     psz = &sec[len];
     
     do {
-        snprintf(psz, 8, "%d", cnt + 1);
+        snprintf(psz, 8, "%d", (Byte)(cnt + 1));
         itrConf = m_conf.find(sec);
         if (m_conf.end() == itrConf) {
             break;

@@ -22,10 +22,6 @@ TickTimer::TickTimer() {
 TickTimer::~TickTimer() {
 }
 
-Int32 TickTimer::start() {
-    return 0;
-}
-
 Void TickTimer::stop() {
     TimerEle* ele = NULL;
     hlist_node* pos = NULL;

@@ -17,6 +17,7 @@ PollPool::PollPool() : m_capacity(DEF_FD_MAX_CAPACITY){
     m_lock = NULL;
     m_infos = NULL;
     m_event_data = NULL;
+    m_timer_data = NULL;
 }
 
 PollPool::~PollPool() {
@@ -35,7 +36,6 @@ Void PollPool::resetFd(FdInfo* info) {
     INIT_LIST_HEAD(&info->m_recv_que); 
     
     info->m_fd = -1;
-    info->m_fd_status = ENUM_SOCK_INIT;
 }
 
 Void PollPool::finishFd(FdInfo* info) {
@@ -44,12 +44,9 @@ Void PollPool::finishFd(FdInfo* info) {
 
 Int32 PollPool::init() {
     Int32 ret = 0;
-    Int32 fd = -1;
-    FdInfo* info = NULL;
 
     INIT_LIST_HEAD(&m_lock_list); 
     INIT_LIST_HEAD(&m_run_list);
-    INIT_LIST_HEAD(&m_idle_list); 
 
     I_NEW(SpinLock, m_lock);
     ret = m_lock->init();
@@ -67,18 +64,15 @@ Int32 PollPool::init() {
 
     I_NEW_1(SockOper, m_sock_oper, m_mng); 
 
-    fd = creatEventFd(); 
-    if (0 > fd) { 
-        return -1;
+    ret = creatEventData();
+    if (0 != ret) {
+        return ret;
     }
 
-    m_event_data = m_usr_center->creatData<EventData>();
-    
-    info = creatReader(fd, ENUM_RD_EVENT_CMD, m_event_data);
-    m_event_data->m_fdinfo = info; 
-
-    /* no need to lock in initializing step */
-    list_add_back(&info->m_io_node, &m_run_list); 
+    ret = creatTimerData();
+    if (0 != ret) {
+        return ret;
+    }
 
     return ret;
 }
@@ -106,12 +100,51 @@ Void PollPool::finish() {
     }
 }
 
+Int32 PollPool::creatEventData() {
+    Int32 fd = -1;
+    FdInfo* info = NULL;
+
+    fd = creatEventFd(); 
+    if (0 > fd) { 
+        return -1;
+    }
+
+    m_event_data = m_usr_center->creatData<EventData>();
+    
+    info = creatReader(fd, ENUM_RD_EVENT_CMD, m_event_data);
+    m_event_data->m_fdinfo = info; 
+
+    /* no need to lock in initializing step */
+    list_add_back(&info->m_io_node, &m_run_list);
+    return 0;
+}
+
+Int32 PollPool::creatTimerData() {
+    Int32 fd = -1;
+    FdInfo* info = NULL;
+
+    /* alarm every 1 sec */
+    fd = creatTimerFd(1000); 
+    if (0 > fd) { 
+        return -1;
+    }
+
+    m_timer_data = m_usr_center->creatData<TimerData>();
+    
+    info = creatReader(fd, ENUM_RD_TIMER, m_timer_data);
+    m_timer_data->m_fdinfo = info; 
+
+    /* no need to lock in initializing step */
+    list_add_back(&info->m_io_node, &m_run_list);
+    return 0;
+}
+
 Void PollPool::set(ManageCenter* mng, UserCenter* usr_center) { 
     m_mng = mng;
     m_usr_center = usr_center;
 }
 
-FdInfo* PollPool::creatReader(Int32 fd, Int32 fd_type, Void* io) {
+FdInfo* PollPool::creatReader(Int32 fd, Int32 rd_type, Void* io) {
     FdInfo* info = NULL;
 
     if (0 <= fd && fd < m_capacity && 0 > m_infos[fd].m_fd) {
@@ -121,7 +154,7 @@ FdInfo* PollPool::creatReader(Int32 fd, Int32 fd_type, Void* io) {
         
         info->m_fd = fd;
         
-        info->m_rd_type = fd_type;
+        info->m_rd_type = rd_type;
         info->m_wr_type = ENUM_WR_END;
         info->m_deal_type = ENUM_DEAL_END;
         
@@ -135,9 +168,8 @@ FdInfo* PollPool::creatReader(Int32 fd, Int32 fd_type, Void* io) {
     }
 }
 
-FdInfo* PollPool::creatSock(Int32 fd, Int32 fd_status,
-    Int32 rd_type, Int32 wr_type, Int32 deal_type, 
-    Void* io, Void* data) {
+FdInfo* PollPool::creatSock(Int32 fd, Int32 rd_type, Int32 wr_type, 
+    Int32 deal_type, Void* io, Void* data) {
     FdInfo* info = NULL;
 
     if (0 <= fd && fd < m_capacity && 0 > m_infos[fd].m_fd) {
@@ -150,7 +182,6 @@ FdInfo* PollPool::creatSock(Int32 fd, Int32 fd_status,
         info->m_rd_type = rd_type; 
         info->m_wr_type = wr_type;
         info->m_deal_type = deal_type;
-        info->m_fd_status = fd_status;
         
         info->m_io_data = io;
         info->m_deal_data = data;
@@ -177,11 +208,22 @@ Void PollPool::addEvent(FdInfo* info) {
     }
 }
 
-Void PollPool::delEvent(FdInfo* info) {
-    LOG_ERROR("del_fd| fd=%d|", info->m_fd);
+Int32 PollPool::delEvent(FdInfo* info, Int32 reason) {
+    LOG_INFO("del_fd| fd=%d|", info->m_fd); 
     
     list_del(&info->m_io_node, &m_run_list);
-    list_add_back(&info->m_io_node, &m_idle_list); 
+
+    if (ENUM_DEAL_END != info->m_deal_type) {
+        /* sock data */
+        shutdownHd(info->m_fd);
+
+        m_usr_center->notifyCloseSock(info, reason);
+    } else {
+        /* readers */
+        finishFd(info);
+    } 
+
+    return 0;
 }
 
 Int32 PollPool::fillEvent() { 
@@ -282,13 +324,8 @@ Int32 PollPool::waitEvent(Int32 cnt) {
                     pfd->fd, pfd->revents);
             }
 
-            if (info->m_rd_err || info->m_wr_err) {
-                delEvent(info);
-                
-                ret = m_mng->failInfo(info);
-                if (0 != ret) {
-                    break;
-                }
+            if (info->m_rd_err || info->m_wr_err || info->m_peer_err) {
+                ret = delEvent(info, info->m_peer_err);
             }
         }
     } else if (0 == ret || EINTR == errno) {
@@ -397,14 +434,15 @@ Int32 PollPool::procEventCmd(list_head* list) {
 
         msg = MsgCenter::node2msg(pos);
         
-        execCmd(msg);
-        MsgCenter::free(msg);
+        execCmd(msg); 
     }    
 
     return 0;
 }
 
 Void PollPool::execCmd(MsgHdr* msg) {
+
+    MsgCenter::free(msg);
 }
 
 Bool PollPool::lock() {
@@ -419,8 +457,6 @@ Int32 PollPool::sendMsg(FdInfo* info, MsgHdr* msg) {
     Bool bOk = TRUE;
     Bool need = FALSE;
 
-    MsgCenter::addCrc(msg);
- 
     bOk = lock();
     if (bOk) {
         MsgCenter::notify(msg, &info->m_send_que);
@@ -497,4 +533,5 @@ Int32 PollPool::readTcpRaw(FdInfo* info, SockBase* sock) {
     ret = m_sock_oper->readTcpRaw(info, sock);
     return ret;
 }
+
 

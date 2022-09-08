@@ -178,7 +178,7 @@ Int32 buildParam(const Char ip[], Int32 port, TcpParam* param) {
 
     memset(param, 0, sizeof(TcpParam));
     
-    strncpy(param->m_ip, ip, DEF_IP_SIZE);
+    strncpy(param->m_ip, ip, DEF_IP_SIZE-1);
     param->m_port = port;
 
     param->m_addr_len = (Int32)sizeof(param->m_addr);
@@ -396,17 +396,23 @@ Int32 readEvent(int fd, Uint32* pVal) {
 
 Int32 creatTimerFd(Int32 ms) {
     Int32 ret = 0;
+    Int32 sec = 0;
     Int32 fd = -1;
     struct itimerspec value;
+
+    if (1000 <= ms) {
+        sec = ms / 1000;
+        ms = ms % 1000;
+    }
 
     fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK);
     if (0 > fd) {
         return -1;
     }
-
+    
     value.it_value.tv_sec = 0;
 	value.it_value.tv_nsec = 1;
-    value.it_interval.tv_sec = 0;
+    value.it_interval.tv_sec = sec;
 	value.it_interval.tv_nsec = ms * 1000000;
     ret = timerfd_settime(fd, 0, &value, NULL);
     if (0 != ret) {

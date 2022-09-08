@@ -22,6 +22,7 @@ public:
     Void freeSessAccptQue(order_list_head* list, Bool isClose);
     Void freeSessConnQue(order_list_head* list, Bool isClose);
     Void freeAdminAccptQue(list_head* list, Bool isClose);
+    Void freeRoutePairQue(list_head* list, Bool isClose);
 
     template<typename T>
     T* creatData();
@@ -48,6 +49,17 @@ public:
     Int32 startAgent(FdInfo* info, Uint32 usrId, Uint32 sessId);
     Int32 stopAgent(FdInfo* info, Uint32 usrId, Uint32 sessId, Int32 reason);
     Int32 startAuth(UserConn* usrConn);
+    Int32 startRouterAuth(RouterPair* routerPair);
+    Int32 sendUsrArrival(FdInfo* info, Uint32 usrId);
+    Int32 sendSessArrival(FdInfo* info, Uint32 usrId, Uint32 sessId);
+
+    Int32 routeMsg(FdInfo* info, MsgHdr* msg, Bool* pDel);
+
+    Int32 notifyCloseSock(FdInfo* info, Int32 reason);
+    Int32 notifyCloseChild(FdInfo* info, Uint32 usrId, 
+        Uint32 sessId,Int32 reason);
+
+    Int32 stopGateway(FdInfo* info, Uint32 route_id, Int32 reason);
 
     MsgHdr* decCipherText(EvpBase* evp, MsgHdr* input);
     MsgHdr* encPlainText(EvpBase* evp, MsgHdr* input);

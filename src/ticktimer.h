@@ -15,10 +15,9 @@
 class TickTimer { 
 public:
     TickTimer();
-    virtual ~TickTimer(); 
+    ~TickTimer(); 
 
-    virtual Int32 start();
-    virtual Void stop();
+    Void stop();
     
     inline Uint32 monoTick() const {
         return m_tick;

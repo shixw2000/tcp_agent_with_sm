@@ -12,10 +12,13 @@ class SessAccptAuth {
 public:
     SessAccptAuth(ManageCenter* mng, UserCenter* usr_center);
     
-    Void process(SessionAccpt* sessAccpt, MsgHdr* msg);
+    Int32 process(SessionAccpt* sessAccpt, MsgHdr* msg, Bool* pDel);
 
 private:
-    Int32 procPlainData(SessionAccpt* sessAccpt, MsgHdr* msg); 
+    Int32 procPlainData(SessionAccpt* sessAccpt, MsgHdr* msg, Bool* pDel); 
+    Int32 procSessArrival(SessionAccpt* sessAccpt, MsgHdr* msg, Bool* pDel);
+    Int32 procStopSess(SessionAccpt* sessAccpt, MsgHdr* msg, Bool* pDel);
+    Int32 procCloseSess(SessionAccpt* sessAccp, MsgHdr* msg, Bool* pDel);
     
 private:
     ManageCenter* m_mng;
@@ -26,10 +29,12 @@ class SessConnAuth {
 public:
     SessConnAuth(ManageCenter* mng, UserCenter* usr_center);
     
-    Void process(SessionConn* sessConn, MsgHdr* msg);
+    Int32 process(SessionConn* sessConn, MsgHdr* msg, Bool* pDel);
 
 private:
-    Int32 procPlainData(SessionConn* sessConn, MsgHdr* msg);
+    Int32 procPlainData(SessionConn* sessConn, MsgHdr* msg, Bool* pDel);
+    Int32 procStopSess(SessionConn* sessConn, MsgHdr* msg, Bool* pDel);
+    Int32 procCloseSess(SessionConn* sessConn, MsgHdr* msg, Bool* pDel);
 
 private:
     ManageCenter* m_mng;

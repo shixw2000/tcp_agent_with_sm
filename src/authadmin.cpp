@@ -10,14 +10,20 @@ AdminAccptAuth::AdminAccptAuth(ManageCenter* mng, UserCenter* usr_center) {
     m_usr_center = usr_center;
 }
 
-Void AdminAccptAuth::process(AdminAccpt* adminAccpt, MsgHdr* msg) {
+Int32 AdminAccptAuth::process(AdminAccpt* adminAccpt, MsgHdr* msg, Bool* pDel) {
+    Int32 ret = -1;
+    
     if (ENUM_MSG_CMD_ADM_INIT_EKEY == msg->m_cmd) {
-        procEkeyInit(adminAccpt, msg);
+        ret = procEkeyInit(adminAccpt, msg, pDel);
     } else {
+        ret = -1;
     } 
+
+    return ret;
 }
 
-Int32 AdminAccptAuth::procEkeyInit(AdminAccpt* adminAccpt, MsgHdr* msg) {
+Int32 AdminAccptAuth::procEkeyInit(AdminAccpt* adminAccpt, 
+    MsgHdr* msg, Bool* pDel) {
     
     return 0;
 }
@@ -27,14 +33,20 @@ AdminConnAuth::AdminConnAuth(ManageCenter* mng, UserCenter* usr_center) {
     m_usr_center = usr_center;
 }
 
-Void AdminConnAuth::process(AdminConn* adminConn, MsgHdr* msg) {
+Int32 AdminConnAuth::process(AdminConn* adminConn, MsgHdr* msg, Bool* pDel) {
+    Int32 ret = 0;
+    
     if (ENUM_MSG_CMD_AUTH_PKEY_ACK == msg->m_cmd) {
-        procAuthPkey(adminConn, msg);
+        ret = procAuthPkey(adminConn, msg, pDel);
     } else {
+        ret = -1;
     } 
+
+    return ret;
 }
 
-Int32 AdminConnAuth::procAuthPkey(AdminConn* adminConn, MsgHdr* msg) {
+Int32 AdminConnAuth::procAuthPkey(AdminConn* adminConn, 
+    MsgHdr* msg, Bool* pDel) {
     
     return 0;
 }

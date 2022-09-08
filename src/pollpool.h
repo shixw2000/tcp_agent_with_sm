@@ -3,13 +3,9 @@
 #include"globaltype.h"
 #include"listnode.h"
 #include"cthread.h"
-
+#include"datatype.h"
 
 struct pollfd;
-struct FdInfo;
-struct SockBase;
-struct MsgHdr;
-struct EventData;
 class ManageCenter; 
 class UserCenter;
 class Lock;
@@ -25,10 +21,9 @@ public:
 
     Void set(ManageCenter* mng, UserCenter* usr_center);
 
-    FdInfo* creatReader(Int32 fd, Int32 fd_type, Void* io);
+    FdInfo* creatReader(Int32 fd, Int32 rd_type, Void* io);
     
-    FdInfo* creatSock(Int32 fd, Int32 fd_status,
-        Int32 rd_type, Int32 wr_type,
+    FdInfo* creatSock(Int32 fd, Int32 rd_type, Int32 wr_type,
         Int32 deal_type, Void* io, Void* data); 
 
     Void addEvent(FdInfo* info);
@@ -55,10 +50,13 @@ private:
 
     Int32 pollEvent();
 
-    Void delEvent(FdInfo* info); 
+    Int32 delEvent(FdInfo* info, Int32 reason); 
     
     Int32 procEventCmd(list_head* list);
     Void execCmd(MsgHdr* msg); 
+
+    Int32 creatEventData();
+    Int32 creatTimerData();
 
     Bool lock();
     Bool unlock();
@@ -68,7 +66,6 @@ private:
     
     list_head m_lock_list;
     list_head m_run_list;
-    list_head m_idle_list;
     
     ManageCenter* m_mng; 
     UserCenter* m_usr_center;
@@ -77,6 +74,7 @@ private:
     FdInfo* m_infos;
     Lock* m_lock; 
     EventData* m_event_data;
+    TimerData* m_timer_data;
     SockOper* m_sock_oper;
 };
 

@@ -2,9 +2,13 @@
 RM=rm -f
 
 COMILE_OPT=
-MACROS=
+MACROS=-D__LOG_LEVEL__=0
 
+ifndef debug
+CC=g++ -s -O3 -W -Wall $(MACROS) $(COMILE_OPT)
+else
 CC=g++ -g -Wall  $(MACROS) $(COMILE_OPT)
+endif
 
 prog:=bin_test
 inc_dir=-I../include

@@ -50,7 +50,7 @@ extern const Char* clockMs();
 } while (0)
 
 #ifndef __LOG_LEVEL__
-#define __LOG_LEVEL__ 1
+#define __LOG_LEVEL__ 0
 #endif
 
 #if (__LOG_LEVEL__ >= 2)
@@ -109,6 +109,7 @@ static const Char DEF_SM4_KEY[] = "123456";
 static const Int32 DEF_SM4_KEY_LEN = 6;
 
 extern Void printHex(const Char* prompt, const Void* data, int len);
+extern Int32 hex2Bin(const Void* hex, Int32 len, Void* out);
 
 #endif
 

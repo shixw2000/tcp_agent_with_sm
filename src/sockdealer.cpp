@@ -42,7 +42,6 @@ Void SockDealer::finish() {
 }
 
 Int32 SockDealer::work() {
-    Int32 ret = 0;
     Bool bOk = TRUE;
     FdInfo* info = NULL; 
 
@@ -62,14 +61,14 @@ Int32 SockDealer::work() {
         }
 
         if (NULL != info) {
-            ret = dealFd(info);
+            dealFd(info);
         }
+
+        return 0;
     } else {
         /* mark to end the loop running */
-        ret = 1;
+        return 1;
     }
-
-    return ret;
 }
 
 Int32 SockDealer::dispatchMsg(FdInfo* info, MsgHdr* msg) {
@@ -96,7 +95,8 @@ Int32 SockDealer::dispatchMsg(FdInfo* info, MsgHdr* msg) {
     }
 }
 
-Int32 SockDealer::dealFd(FdInfo* info) {
+Void SockDealer::dealFd(FdInfo* info) {
+    Int32 ret = 0;
     Bool bOk = TRUE;
     Bool finished = FALSE;
     list_node* pos = NULL;
@@ -109,7 +109,10 @@ Int32 SockDealer::dealFd(FdInfo* info) {
 
             msg = MsgCenter::node2msg(pos);
             
-            m_mng->procMsg(info, msg); 
+            ret = m_mng->procMsg(info, msg); 
+            if (0 != ret) {
+                break;
+            }
         } else {
             bOk = m_cond->lock();
             if (bOk) {
@@ -128,7 +131,7 @@ Int32 SockDealer::dealFd(FdInfo* info) {
         }
     }
     
-    return 0;
+    return;
 }
 
 Void SockDealer::addRunQue(FdInfo* info) {

@@ -9,6 +9,7 @@ struct MsgHdr {
     Int32 m_size;
     Uint32 m_seq;
     Uint32 m_crc;
+    Uint32 m_retcode;
     Uint16 m_version;
     Uint16 m_cmd;
 };
@@ -21,6 +22,21 @@ struct MsgStartPeer {
 struct MsgStopPeer {
     Uint32 m_user_id;
     Uint32 m_session_id;
+    Int32 m_reason;
+};
+
+struct MsgCloseSock {
+    Int32 m_reason;
+};
+
+struct MsgCloseChild {
+    Uint32 m_user_id;
+    Uint32 m_session_id;
+    Int32 m_reason;
+};
+
+struct MsgStopGateway {
+    Uint32 m_route_id;
     Int32 m_reason;
 };
 
@@ -72,6 +88,21 @@ struct MsgUserCKeyAck {
     Byte m_secret[DEF_SECRET_DATA_SIZE];
 };
 
+struct MsgUserAuthEnd {
+    Uint32 m_user_id;
+    Char m_src_seid[DEF_SEID_SIZE];
+    Char m_dst_seid[DEF_SEID_SIZE];
+};
+
+struct MsgSessArrival {
+    Uint32 m_user_id;
+    Uint32 m_session_id;
+};
+
+struct MsgUserArrival {
+    Uint32 m_user_id;
+};
+
 struct MsgAdmEkeyInit {
 };
 
@@ -97,6 +128,10 @@ enum EnumMsgCmd {
 
     ENUM_MSG_CMD_START_PEER,
     ENUM_MSG_CMD_STOP_PEER,
+    ENUM_MSG_CMD_CLOSE_SOCK,
+    ENUM_MSG_CMD_CLOSE_CHILD,
+
+    ENUM_MSG_CMD_STOP_GATEWAY,
     
     ENUM_MSG_CMD_TCP_PLAIN,
     ENUM_MSG_CMD_TCP_CIPHER,
@@ -104,6 +139,10 @@ enum EnumMsgCmd {
     ENUM_MSG_USR_AUTH_REQ,
     ENUM_MSG_USR_EXCH_KEY,
     ENUM_MSG_USR_CIPHER_KEY_ACK,
+    ENUM_MSG_USR_AUTH_END,
+
+    ENUM_MSG_USR_ARRIVAL,
+    ENUM_MSG_SESS_ARRIVAL,
 
     ENUM_MSG_CMD_TIMER_TICK,
     ENUM_MSG_CMD_TIMEOUT,

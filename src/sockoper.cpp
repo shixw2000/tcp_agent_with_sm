@@ -16,7 +16,7 @@ SockOper::SockOper(ManageCenter* mng) {
 SockOper::~SockOper() {
 }
 
-Int32 SockOper::readTcpRaw(FdInfo* info, SockBase* sock) {
+Int32 SockOper::readTcpRaw(FdInfo* info, SockBase*) {
     Int32 rdlen = 0;
     MsgHdr* msg = NULL;
     MsgTcpPlain* tcpData = NULL;

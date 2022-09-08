@@ -4,6 +4,8 @@
 
 
 class Sm4Util { 
+    static const Int32 MAX_SM4_CTX_SIZE = 256;
+    
 public:
     Sm4Util();
     ~Sm4Util();
@@ -16,13 +18,15 @@ public:
     Int32 sm4_cbc_encrypt(const Void* data, Int32 len, Void* out) const;
     Int32 sm4_cbc_decrypt(const Void* data, Int32 len, Void* out) const;
 
+    Int32 sm4_ecb_encrypt(const Void* data, Int32 len, Void* out) const;
+    Int32 sm4_ecb_decrypt(const Void* data, Int32 len, Void* out) const;
+
 private:
     Int32 trunc(const Byte* data, Int32 len, Byte* final) const;
     
 private:
-    Byte m_assist[DEF_SM4_BLOCK_SIZE];
     Byte m_iv[DEF_SM4_BLOCK_SIZE];
-    Byte m_key[DEF_SM4_BLOCK_SIZE];
+    Byte m_key[MAX_SM4_CTX_SIZE];
 };
 
 class Sm3Util {

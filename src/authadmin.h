@@ -12,10 +12,10 @@ class AdminAccptAuth {
 public:
     AdminAccptAuth(ManageCenter* mng, UserCenter* usr_center);
     
-    Void process(AdminAccpt* adminAccpt, MsgHdr* msg);
+    Int32 process(AdminAccpt* adminAccpt, MsgHdr* msg, Bool* pDel);
 
 private:
-    Int32 procEkeyInit(AdminAccpt* adminAccpt, MsgHdr* msg); 
+    Int32 procEkeyInit(AdminAccpt* adminAccpt, MsgHdr* msg, Bool* pDel); 
     
 private:
     ManageCenter* m_mng;
@@ -26,10 +26,10 @@ class AdminConnAuth {
 public:
     AdminConnAuth(ManageCenter* mng, UserCenter* usr_center);
     
-    Void process(AdminConn* adminConn, MsgHdr* msg);
+    Int32 process(AdminConn* adminConn, MsgHdr* msg, Bool* pDel);
 
 private:
-    Int32 procAuthPkey(AdminConn* adminConn, MsgHdr* msg); 
+    Int32 procAuthPkey(AdminConn* adminConn, MsgHdr* msg, Bool* pDel); 
     
 private:
     ManageCenter* m_mng;

@@ -4,6 +4,7 @@
 #include"msgcenter.h"
 #include"managecenter.h"
 #include"smutil.h"
+#include"ticktimer.h"
 
 
 static Int32 cmpSessAccptID(list_node* n1, list_node* n2) {
@@ -123,6 +124,8 @@ TimerData* UserCenter::creatData<TimerData>() {
     I_NEW(TimerData, timer);
     memset(timer, 0, sizeof(TimerData));
 
+    I_NEW(TickTimer, timer->m_timer);
+    
     resetNode(&timer->m_base);
     timer->m_base.m_node_type = ENUM_NODE_TIMER;
 
@@ -131,7 +134,11 @@ TimerData* UserCenter::creatData<TimerData>() {
 
 template<>
 Void UserCenter::freeData<TimerData>(TimerData* timer) {
-    if (NULL != timer) {        
+    if (NULL != timer) {  
+        if (NULL != timer->m_timer) {
+            I_FREE(timer->m_timer);
+        }
+        
         I_FREE(timer);
     }
 }
@@ -215,7 +222,8 @@ UserAccpt* UserCenter::creatData<UserAccpt>() {
 
     INIT_ORDER_LIST_HEAD(&user->m_session_que, &cmpSessConnID);
 
-    user->m_evp = creatEvp(); 
+    user->m_evp_rcv = creatEvp();
+    user->m_evp_snd = creatEvp();
 
     user->m_usr_status = ENUM_USER_INIT;
 
@@ -226,10 +234,16 @@ template<>
 Void UserCenter::freeData<UserAccpt>(UserAccpt* usr) {
     closeSock(&usr->m_sock);
     
-    if (NULL != usr->m_evp) {
-        freeEvp(usr->m_evp);
+    if (NULL != usr->m_evp_rcv) {
+        freeEvp(usr->m_evp_rcv);
         
-        usr->m_evp = NULL;
+        usr->m_evp_rcv = NULL;
+    }
+
+    if (NULL != usr->m_evp_snd) {
+        freeEvp(usr->m_evp_snd);
+        
+        usr->m_evp_snd = NULL;
     }
     
     freeSessConnQue(&usr->m_session_que, TRUE);
@@ -250,7 +264,8 @@ UserConn* UserCenter::creatData<UserConn>() {
     
     INIT_ORDER_LIST_HEAD(&user->m_session_que, &cmpSessAccptID);
 
-    user->m_evp = creatEvp(); 
+    user->m_evp_rcv = creatEvp();
+    user->m_evp_snd = creatEvp();
 
     user->m_usr_status = ENUM_USER_INIT;
 
@@ -260,13 +275,19 @@ UserConn* UserCenter::creatData<UserConn>() {
 template<>
 Void UserCenter::freeData<UserConn>(UserConn* usr) {    
     closeSock(&usr->m_sock);
-    
-    if (NULL != usr->m_evp) {
-        freeEvp(usr->m_evp);
+
+    if (NULL != usr->m_evp_rcv) {
+        freeEvp(usr->m_evp_rcv);
         
-        usr->m_evp = NULL;
+        usr->m_evp_rcv = NULL;
     }
-    
+
+    if (NULL != usr->m_evp_snd) {
+        freeEvp(usr->m_evp_snd);
+        
+        usr->m_evp_snd = NULL;
+    }
+  
     freeSessAccptQue(&usr->m_session_que, TRUE);
     
     I_FREE(usr);
@@ -393,6 +414,72 @@ Void UserCenter::freeData<ListenerAdmin>(ListenerAdmin* listener) {
     }
 }
 
+template<>
+RouterPair* UserCenter::creatData<RouterPair>() {
+    RouterPair* routerPair = NULL;
+
+    I_NEW(RouterPair, routerPair);
+    memset(routerPair, 0, sizeof(RouterPair));
+
+    resetNode(&routerPair->m_base);
+    routerPair->m_base.m_node_type = ENUM_NODE_ROUTER_PAIR;
+
+    resetSock(&routerPair->m_router_in.m_sock);
+    routerPair->m_router_in.m_evp_rcv = creatEvp();
+    routerPair->m_router_in.m_evp_snd = creatEvp();
+    routerPair->m_router_in.m_usr_status = ENUM_USER_INIT;
+    
+    resetSock(&routerPair->m_router_out.m_sock);
+    routerPair->m_router_out.m_evp_rcv = creatEvp();
+    routerPair->m_router_out.m_evp_snd = creatEvp();
+    routerPair->m_router_out.m_usr_status = ENUM_USER_INIT;
+
+    return routerPair;
+}
+
+template<>
+Void UserCenter::freeData<Router>(Router* router) {
+    closeSock(&router->m_sock);
+
+    if (NULL != router->m_evp_rcv) {
+        freeEvp(router->m_evp_rcv);
+        
+        router->m_evp_rcv = NULL;
+    }
+
+    if (NULL != router->m_evp_snd) {
+        freeEvp(router->m_evp_snd);
+        
+        router->m_evp_snd = NULL;
+    }
+}
+
+template<>
+Void UserCenter::freeData<RouterPair>(RouterPair* routerPair) {
+    I_FREE(routerPair);
+}
+
+template<>
+ListenerRouter* UserCenter::creatData<ListenerRouter>() {
+    ListenerRouter* listener = NULL;
+
+    I_NEW(ListenerRouter, listener);
+    memset(listener, 0, sizeof(ListenerRouter));
+
+    resetNode(&listener->m_base);
+    listener->m_base.m_node_type = ENUM_NODE_ROUTER_LISTENER;
+
+    INIT_LIST_HEAD(&listener->m_route_pair_que);
+
+    return listener;
+}
+
+template<>
+Void UserCenter::freeData<ListenerRouter>(ListenerRouter* listener) {
+    freeRoutePairQue(&listener->m_route_pair_que, TRUE);
+        
+    I_FREE(listener);
+}
 
 Void UserCenter::freeUsrAccptQue(list_head* list, Bool isClose) {
     list_node* pos = NULL;
@@ -485,6 +572,24 @@ Void UserCenter::freeAdminAccptQue(list_head* list, Bool isClose) {
     }
 }
 
+Void UserCenter::freeRoutePairQue(list_head* list, Bool isClose) {
+    list_node* pos = NULL;
+    list_node* n = NULL;
+    RouterPair* routerPair = NULL;
+    
+    if (!list_empty(list)) {
+        list_for_each_safe(pos, n, list) { 
+            routerPair = (RouterPair*)pos;
+            
+            if (isClose) {
+            } else {
+                list_del(pos, list);
+                freeData(routerPair);
+            }
+        }
+    }
+}
+
 SessionConn* UserCenter::findSessConn(Uint32 sessID, UserAccpt* user) {
     list_node* node = NULL;
     SessionConn* dst = NULL;
@@ -526,6 +631,8 @@ Int32 UserCenter::startAgent(FdInfo* info, Uint32 usrId, Uint32 sessId) {
     startMsg->m_user_id = usrId;
     startMsg->m_session_id = sessId;
 
+    MsgCenter::addCrc(hdr);
+
     ret = m_mng->sendMsg(info, hdr);
     return ret;
 }
@@ -542,6 +649,103 @@ Int32 UserCenter::stopAgent(FdInfo* info, Uint32 usrId,
     msg->m_session_id = sessId;
     msg->m_reason = reason;
 
+    MsgCenter::addCrc(hdr);
+
+    ret = m_mng->sendMsg(info, hdr);
+    return ret;
+}
+
+Int32 UserCenter::notifyCloseSock(FdInfo* info, Int32 reason) {
+    Int32 ret = 0;
+    MsgHdr* hdr = NULL;
+    MsgCloseSock* msg = NULL;    
+
+    hdr = MsgCenter::creat<MsgCloseSock>(ENUM_MSG_CMD_CLOSE_SOCK);
+    msg = MsgCenter::cast<MsgCloseSock>(hdr);
+    msg->m_reason = reason;
+
+    MsgCenter::addCrc(hdr);
+
+    ret = m_mng->dispatchMsg(info, hdr);
+    return ret;
+}
+
+Int32 UserCenter::notifyCloseChild(FdInfo* info, Uint32 usrId, 
+    Uint32 sessId,Int32 reason) {
+    Int32 ret = 0;
+    MsgHdr* hdr = NULL;
+    MsgCloseChild* msg = NULL;    
+
+    hdr = MsgCenter::creat<MsgCloseChild>(ENUM_MSG_CMD_CLOSE_CHILD);
+    msg = MsgCenter::cast<MsgCloseChild>(hdr);
+    msg->m_user_id = usrId;
+    msg->m_session_id = sessId;
+    msg->m_reason = reason;
+
+    MsgCenter::addCrc(hdr);
+
+    ret = m_mng->dispatchMsg(info, hdr);
+    return ret;
+}
+
+Int32 UserCenter::sendUsrArrival(FdInfo* info, Uint32 usrId) {
+    Int32 ret = 0;
+    MsgHdr* hdr = NULL;
+    MsgUserArrival* msg = NULL;    
+
+    hdr = MsgCenter::creat<MsgUserArrival>(ENUM_MSG_USR_ARRIVAL);
+    msg = MsgCenter::cast<MsgUserArrival>(hdr);
+    msg->m_user_id = usrId;
+
+    MsgCenter::addCrc(hdr);
+
+    ret = m_mng->sendMsg(info, hdr);
+    return ret;
+}
+
+Int32 UserCenter::sendSessArrival(FdInfo* info, 
+    Uint32 usrId, Uint32 sessId) {
+    Int32 ret = 0;
+    MsgHdr* hdr = NULL;
+    MsgSessArrival* msg = NULL;    
+
+    hdr = MsgCenter::creat<MsgSessArrival>(ENUM_MSG_SESS_ARRIVAL);
+    msg = MsgCenter::cast<MsgSessArrival>(hdr);
+    msg->m_user_id = usrId;
+    msg->m_session_id = sessId;
+
+    MsgCenter::addCrc(hdr);
+
+    ret = m_mng->sendMsg(info, hdr);
+    return ret;
+}
+
+Int32 UserCenter::routeMsg(FdInfo* info, MsgHdr* msg, Bool* pDel) {
+    Int32 ret = 0; 
+    
+    MsgCenter::reopen(msg);
+    ret = m_mng->sendMsg(info, msg);
+    if (0 == ret) {
+        *pDel = FALSE;
+        
+        return 0;
+    } else {
+        return ENUM_ERR_SEND_MSG;
+    }
+}
+
+Int32 UserCenter::stopGateway(FdInfo* info, Uint32 route_id, Int32 reason) {
+    Int32 ret = 0;
+    MsgHdr* hdr = NULL;
+    MsgStopGateway* msg = NULL;    
+
+    hdr = MsgCenter::creat<MsgStopGateway>(ENUM_MSG_CMD_STOP_GATEWAY);
+    msg = MsgCenter::cast<MsgStopGateway>(hdr);
+    msg->m_route_id = route_id;
+    msg->m_reason = reason;
+
+    MsgCenter::addCrc(hdr);
+
     ret = m_mng->sendMsg(info, hdr);
     return ret;
 }
@@ -555,6 +759,8 @@ Int32 UserCenter::startAuth(UserConn* usrConn) {
     req = MsgCenter::cast<MsgUserAuthReq>(hdr);
     req->m_user_id = usrConn->m_user_id;
 
+    MsgCenter::addCrc(hdr);
+
     ret = m_mng->sendMsg(usrConn->m_fdinfo, hdr);
     if (0 == ret) {
         usrConn->m_usr_status = ENUM_USER_AUTH_REQ;
@@ -562,6 +768,31 @@ Int32 UserCenter::startAuth(UserConn* usrConn) {
         LOG_DEBUG("start_auth| user_id=%u| msg=start now|", usrConn->m_user_id);
     } else {
         LOG_ERROR("start_auth| user_id=%u| msg=invalid", usrConn->m_user_id);
+    }
+    
+    return ret;
+}
+
+Int32 UserCenter::startRouterAuth(RouterPair* routerPair) {
+    Int32 ret = 0;
+    MsgHdr* hdr = NULL;
+    MsgUserAuthReq* req = NULL;    
+
+    hdr = MsgCenter::creat<MsgUserAuthReq>(ENUM_MSG_USR_AUTH_REQ);
+    req = MsgCenter::cast<MsgUserAuthReq>(hdr);
+    req->m_user_id = routerPair->m_router_id;
+
+    MsgCenter::addCrc(hdr);
+
+    ret = m_mng->sendMsg(routerPair->m_router_out.m_fdinfo, hdr);
+    if (0 == ret) {
+        routerPair->m_router_out.m_usr_status = ENUM_USER_AUTH_REQ;
+
+        LOG_DEBUG("start_router_auth| router_id=%u| msg=start now|", 
+            routerPair->m_router_id);
+    } else {
+        LOG_ERROR("start_router_auth| router_id=%u| msg=invalid", 
+            routerPair->m_router_id);
     }
     
     return ret;
@@ -614,6 +845,8 @@ MsgHdr* UserCenter::decCipherText(EvpBase* evp, MsgHdr* input) {
     plain->m_session_id = cipher->m_session_id;
     plain->m_data_len = dec_len;
 
+    MsgCenter::addCrc(output);
+
     if (dec_len == cipher->m_plain_len) {
         LOG_DEBUG("cipher_to_plain| user_id=%u| sess_id=%u|"
             " cipher_len=%d| plain_len=%d| pre_len=%d|"
@@ -663,6 +896,8 @@ MsgHdr* UserCenter::encPlainText(EvpBase* evp, MsgHdr* input) {
     
     /* do a hash digest with sm3 */
     cipher->m_mac = hashMac(evp, cipher->m_data, cipher->m_cipher_len);
+
+    MsgCenter::addCrc(output);
     
     LOG_DEBUG("plain_to_cipher| user_id=%u| sess_id=%u|"
         " plain_len=%d| cipher_len=%d| pre_len=%d| mac=0x%x| msg=ok|",

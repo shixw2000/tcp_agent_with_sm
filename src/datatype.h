@@ -67,6 +67,7 @@ struct ListenerTcp {
     UserConn* m_user; // this is the child of listener
     
     const TcpPairs* m_tcp_pairs;
+    Bool m_tunnel_ok;
 };
 
 struct ListenerDirty {
@@ -103,7 +104,8 @@ struct UserAccpt {
     Int32 m_usr_status;
 
     SockBase m_sock;
-    EvpBase* m_evp;
+    EvpBase* m_evp_rcv;
+    EvpBase* m_evp_snd;
 };
 
 struct UserConn {
@@ -119,7 +121,8 @@ struct UserConn {
     Int32 m_usr_status;
 
     SockBase m_sock;
-    EvpBase* m_evp;
+    EvpBase* m_evp_rcv;
+    EvpBase* m_evp_snd;
 };
 
 
@@ -173,6 +176,41 @@ struct AdminConn {
     SockBase m_sock;
 };
 
+struct ListenerRouter {
+    NodeBase m_base;
+    
+    list_head m_route_pair_que;
+
+    EkeyBase* m_ekey;
+    FdInfo* m_fdinfo;
+
+    Int32 m_enc_type; // check if encrypt or decrypt 
+    
+    const TcpPairs* m_tcp_pairs;
+};
+
+struct Router {
+    FdInfo* m_fdinfo;
+    
+    Int32 m_usr_status;
+
+    SockBase m_sock;
+    EvpBase* m_evp_rcv;
+    EvpBase* m_evp_snd;
+};
+
+struct RouterPair {
+    NodeBase m_base;
+
+    ListenerRouter* m_parent;
+
+    Uint32 m_router_id;
+    
+    Router m_router_in;
+    Router m_router_out;
+};
+
+
 struct FdInfo { 
     list_node m_io_node; 
     list_node m_deal_node; 
@@ -191,7 +229,6 @@ struct FdInfo {
     Int32 m_rd_type;
     Int32 m_wr_type;
     Int32 m_deal_type;
-    Int32 m_fd_status;
     
     Bool m_test_rd; 
     Bool m_test_wr; 
@@ -200,6 +237,7 @@ struct FdInfo {
     
     Bool m_wr_err;
     Bool m_rd_err;
+    Bool m_peer_err;
 
     Bool m_is_dealing;
 };
@@ -207,11 +245,15 @@ struct FdInfo {
 enum EnumNodeType {
     ENUM_NODE_TCP_LISTENER,
     ENUM_NODE_DIRTY_LISTENER,
+    ENUM_NODE_ROUTER_LISTENER,
     ENUM_NODE_ADMIN_LISTENER,
     ENUM_NODE_SESS_ACCPT,
     ENUM_NODE_SESS_CONN,
     ENUM_NODE_USER_ACCPT,
     ENUM_NODE_USER_CONN,
+    ENUM_NODE_ROUTER_PAIR,
+    ENUM_NODE_ROUTER_ACCPT,
+    ENUM_NODE_ROUTER_CONN,
     ENUM_NODE_ADMIN_ACCPT,
     ENUM_NODE_ADMIN_CONN,
 
@@ -226,6 +268,7 @@ enum EnumRdType {
     ENUM_RD_TIMER,
     ENUM_RD_TCP_LISTENER,
     ENUM_RD_DIRTY_LISTENER,
+    ENUM_RD_ROUTER_LISTENER,
     ENUM_RD_ADMIN_LISTENER,
     ENUM_RD_TCP_RAW,
     ENUM_RD_DIRTY_MSG,
@@ -236,6 +279,7 @@ enum EnumRdType {
 enum EnumWrType {
     ENUM_WR_TCP_CONNECTING,
     ENUM_WR_DIRTY_CONNECTING,
+    ENUM_WR_ROUTER_CONNECTING,
     ENUM_WR_SOCK_MSG,
 
     ENUM_WR_END
@@ -247,30 +291,27 @@ enum EnumDealType {
     ENUM_DEAL_USER_IN,
     ENUM_DEAL_USER_OUT,
 
+    ENUM_DEAL_ROUTER_IN,
+    ENUM_DEAL_ROUTER_OUT,
+
     ENUM_DEAL_ADMIN_IN,
     ENUM_DEAL_ADMIN_OUT,
 
     ENUM_DEAL_END
 };
 
-enum EnumSockStatus {
-    ENUM_SOCK_INIT = 0,
-
-    ENUM_SOCK_CONNECTING,
-    ENUM_SOCK_ESTABLISH,
-    ENUM_SOCK_SHUTDOWN,
-    ENUM_SOCK_CLOSING,
-    ENUM_SOCK_CLOSED,
-
-    ENUM_SOCK_END
-};
 
 enum EnumUserStatus {
     ENUM_USER_INIT,
+    ENUM_USER_WAIT_REQ,
     ENUM_USER_AUTH_REQ,
     ENUM_USER_EXCH_KEY,
+    ENUM_USER_EXCH_KEY_ACK,
     ENUM_USER_LOGIN,
+    
     ENUM_USER_LOGOUT,
+
+    ENUM_USER_ERROR,
 
     ENUM_USER_END
 };
@@ -281,7 +322,17 @@ enum EnumErrCode {
     ENUM_ERR_FAIL = 1000,
 
     ENUM_ERR_CONN_SERVER,
+    ENUM_ERR_SESS_ALREADY_EXISTS,
+    ENUM_ERR_CONN_SESSEION,
     ENUM_ERR_INVALID_SESS,
+    ENUM_ERR_NOT_LOGIN_GATEWAY,
+    ENUM_ERR_NOT_LOGIN_USER,
+    ENUM_ERR_AUTH_GATEWAY,
+    ENUM_ERR_START_CONN_GATEWAY,
+
+    ENUM_ERR_PEER_NOT_READY,
+    ENUM_ERR_SEND_MSG,
+    ENUM_ERR_DISPATCH_MSG,
 
     ENUM_ERR_END
 };

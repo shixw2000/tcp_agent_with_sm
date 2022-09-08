@@ -26,7 +26,7 @@ private:
     virtual Int32 work(); 
 
     Void addRunQue(FdInfo* info);
-    Int32 dealFd(FdInfo* info);
+    Void dealFd(FdInfo* info);
 
 private: 
     list_head m_lock_list;
