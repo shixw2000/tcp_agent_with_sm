@@ -1,49 +1,64 @@
 #include<unistd.h>
-#include<pthread.h>
-#include<signal.h>
+#include<sys/syscall.h>
 #include<sys/types.h>
+#include<signal.h>
+#include<pthread.h>
+#include<sys/types.h>
+#include<sys/stat.h>
+#include<fcntl.h>
 #include"globaltype.h"
 #include"cthread.h"
-#include"sockutil.h"
 
+
+struct CThread::_intern {
+    pthread_t m_thr;
+    char m_name[32];
+};
 
 CThread::CThread() {
-    m_thr = 0;
-    m_isRun = FALSE;
-    memset(m_name, 0, sizeof(m_name));
+    m_intern = NULL;
+    m_service = NULL;
 }
 
 CThread::~CThread() {
+    if (NULL != m_intern) {
+        delete m_intern;
+    }
 }
 
-int CThread::start(const char name[]) {
+unsigned long CThread::getThr() const {
+    if (NULL != m_intern) {
+        return m_intern->m_thr;
+    } else {
+        return 0;
+    }
+}
+
+int CThread::start(const char name[], I_Service* service) {
     int ret = 0;
-    pthread_t thr;
     pthread_attr_t attr;
 
-    if (NULL != name) {
-        strncpy(m_name, name, 30);
-    }
+    m_intern = new struct _intern;
+    memset(m_intern, 0, sizeof(*m_intern));
     
-    if (0 < m_thr) {
-        LOG_ERROR("pthread_start| m_thr=0x%llx|"
-            " msg=thread is already running|", m_thr);
-        return -1;
+    if (NULL != name) {
+        strncpy(m_intern->m_name, name, sizeof(m_intern->m_name));
+    }
+
+    if (NULL != service) {
+        m_service = service;
     }
 
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
-    m_isRun = TRUE;
-    ret = pthread_create(&thr, &attr, &CThread::activate, this);
-    if (0 == ret) {
-        m_thr = thr;
-        
-        LOG_DEBUG("pthread_create| thrid=0x%llx| name=%s|", m_thr, m_name);
+    ret = pthread_create(&m_intern->m_thr, &attr, &CThread::activate, this);
+    if (0 == ret) {        
+        LOG_DEBUG("pthread_create| thrid=0x%lx| name=%s|", 
+            m_intern->m_thr, m_intern->m_name);
     } else {
         LOG_ERROR("pthread_create| ret=%d| error=%s|", ret, ERR_MSG());
 
-        m_isRun = FALSE;
         ret =  -1;
     }
     
@@ -51,110 +66,76 @@ int CThread::start(const char name[]) {
     return ret;
 }
 
-void CThread::stop() {
-    m_isRun = FALSE;
-}
-
 void CThread::join() {
-    if (0 < m_thr) { 
-        pthread_join(m_thr, NULL);
-        m_thr = 0;
+    if (NULL != m_intern && 0 != m_intern->m_thr) { 
+        pthread_join(m_intern->m_thr, NULL);
+        m_intern->m_thr = 0;
     }
 }
 
 void* CThread::activate(void* arg) {
-    Int32 ret = 0;
-    CThread* pthr = NULL;
-
-    pthr = (CThread*)arg; 
+    int ret = 0;
+    CThread* pthr = (CThread*)arg;
     
     ret = pthr->run(); 
 
-    LOG_INFO("exit| ret=%d| thrid=0x%llx| name=%s|", 
-        ret, pthr->m_thr, pthr->m_name); 
+    LOG_INFO("exit| ret=%d| thrid=0x%lx| name=%s|", 
+        ret, pthr->m_intern->m_thr, pthr->m_intern->m_name); 
     
-    return NULL;
+    return (void*)(Uint64)ret;
 }
 
+int getTid() {
+    int tid = 0;
 
-CService::CService() {
-    m_worker = NULL;
+    tid = syscall(SYS_gettid);
+    return tid;
 }
 
-Void CService::set(I_Worker* worker) {
-    m_worker = worker;
+void sleepSec(int sec) {
+    sleep(sec);
 }
 
-Int32 CService::run() { 
-    Int32 ret = 0;
-    
-    while (isRun() && 0 == ret) { 
-        ret = m_worker->work();
-    }
-    
-    return ret;
+void maskSig(int sig) {
+    sigset_t sets;
+
+    sigemptyset(&sets);
+    sigaddset(&sets, sig);
+
+    pthread_sigmask(SIG_BLOCK, &sets, NULL);
 }
 
+void armSig(int sig, void (*fn)(int)) {
+    struct sigaction act;
 
-EventService::EventService() {
-    m_atom = 0;
-    m_event_fd = creatEventFd();
+    memset(&act, 0, sizeof(act));
+    sigemptyset(&act.sa_mask);
+
+    act.sa_flags = SA_RESTART;
+    act.sa_handler = fn;
+
+    sigaction(sig, &act, NULL);
 }
 
-EventService::~EventService() {
-}
+void getRand(Void* buf, Int32 len) {
+    static Uint64 g_rand = 0;
+    int fd = -1;
+    int cnt = 0;
 
-Int32 EventService::run() { 
-    Int32 ret = 0;
-    
-    while (isRun() && 0 == ret) { 
-        ret = doService();
-    }
-    
-    return ret;
-}
-
-Void EventService::stop() {    
-    CThread::stop(); 
-
-    alarm();
-}
-
-Void EventService::signal() {
-    Uint32 val = 0;
-
-    val = ATOMIC_FETCH_INC(&m_atom);
-    if (0 == val) { 
-        this->alarm(); 
-    }
-}
-
-Int32 EventService::doService() {
-    Int32 ret = 0;
-    Bool bOk = TRUE;
-    Uint32 old = 0; 
-    
-    old = ACCESS_ONCE(m_atom); 
-    
-    ret = consume(); 
-    if (0 == ret) {
-        bOk = CAS(&m_atom, old, 0);
-        if (bOk) {
-            this->pause(DEF_POLL_WAIT_MILLISEC);
+    if (0 < len) {
+        fd = open("/dev/urandom", O_RDONLY|O_NONBLOCK);
+        if (0 <= fd) {
+            cnt = read(fd, buf, len);
+            close(fd);
         }
 
-        return 0;
-    } else {
-        return ret;
+        if (cnt != len) {
+            --g_rand;
+            
+            memcpy(buf, &g_rand, len);
+        }
     }
+    
+    return;
 }
-
-void EventService::alarm() {
-    writeEvent(m_event_fd); 
-}
- 
-void EventService::pause(Int32 ms) {
-    waitEvent(m_event_fd, ms);
-}
-
 

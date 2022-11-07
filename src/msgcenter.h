@@ -11,7 +11,7 @@ class MsgCenter {
 public: 
 
     template<typename T>
-    static MsgHdr* creat(Int16 cmd, Int32 extlen = 0) {
+    static MsgHdr* creat(Uint16 cmd, Int32 extlen = 0) {
         MsgHdr* hdr = NULL;
         Int32 len = sizeof(MsgHdr) + sizeof(T) + extlen;
 
@@ -19,8 +19,7 @@ public:
 
         hdr->m_version = DEF_MSG_VER;
         hdr->m_cmd = cmd;
-
-        setsize(len, hdr);
+        hdr->m_size = len;
         
         return hdr;
     }
@@ -55,8 +54,6 @@ public:
 
     static void notify(MsgHdr* msg, list_head*);
     static void emerge(MsgHdr* msg, list_head*);
-
-    static void add(MsgHdr* msg, order_list_head* head);
 
     static Int32 fillMsg(const Void* buf, Int32 len, MsgHdr* msg);
 

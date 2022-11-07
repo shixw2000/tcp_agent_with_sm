@@ -156,17 +156,37 @@ Int32 setReuse(Int32 fd) {
     return ret;
 }
 
+Void setNoTimewait(int fd) {
+    int ret = 0;
+    struct linger val;
+	int len = sizeof(val);
+    
+    val.l_onoff=1;
+    val.l_linger=0;
+    ret = setsockopt(fd, SOL_SOCKET, SO_LINGER, &val, len);
+    if (0 != ret) {
+        LOG_INFO("set_no_timewait| fd=%d| ret=%d| error=%s|", 
+            fd, ret, ERR_MSG());
+    }
+}
+
 Int32 creatAddr(const Char ip[], int port, Void* addr, Int32* plen) {
     Int32 ret = 0;
     struct sockaddr_in* dst = (struct sockaddr_in*)addr;
 
     memset(addr, 0, *plen);
-    dst->sin_family = AF_INET;
-    dst->sin_port = htons(port);
-    ret = inet_pton(AF_INET, ip, &dst->sin_addr);
-    if (1 == ret) {
-        *plen = sizeof(struct sockaddr_in);
-        return 0;
+
+    if (0 < port && 0x10000 > port) {
+        dst->sin_family = AF_INET;
+        dst->sin_port = htons(port);
+        ret = inet_pton(AF_INET, ip, &dst->sin_addr);
+        if (1 == ret) {
+            *plen = sizeof(struct sockaddr_in);
+            return 0;
+        } else {
+            *plen = 0;
+            return -1;
+        }
     } else {
         *plen = 0;
         return -1;
@@ -331,6 +351,8 @@ Int32 acceptCli(Int32 fd) {
     newFd = accept(fd, NULL, NULL);
     if (0 <= newFd) {
         setNonBlock(newFd);
+        setNoTimewait(newFd);
+        
         return newFd;
     } else if (EAGAIN == errno || EINTR == errno) {
         return -2;
@@ -470,6 +492,7 @@ Int32 connFast(const TcpParam* param, Int32* pfd) {
     }
 
     setNonBlock(fd);
+    setNoTimewait(fd);
 
     ret = connCli(fd, param);
     if (1 == ret) {
@@ -501,6 +524,7 @@ Int32 connSlow(const TcpParam* param, Int32* pfd) {
     ret = connCli(fd, param);
     if (0 == ret) {
         setNonBlock(fd);
+        setNoTimewait(fd);
         
         /* conn ok */
         *pfd = fd;

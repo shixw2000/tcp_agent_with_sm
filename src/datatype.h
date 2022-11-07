@@ -17,6 +17,11 @@ struct TcpParam {
     Char m_addr[DEF_ADDR_SIZE];
 };
 
+struct TcpPairs {
+    TcpParam m_local;
+    TcpParam m_peer;
+};
+
 struct SockBase { 
     MsgHdr* m_curr_snd;
     MsgHdr* m_curr_rcv;
@@ -25,11 +30,17 @@ struct SockBase {
     Byte m_buf[DEF_MSG_HEADER_SIZE];
 };
 
-struct EkeyBase {
-    Int32 m_status;
-    Byte m_seid[DEF_SEID_SIZE];
-    Byte m_symm_key[DEF_SYM_KEY_SIZE];
-    Byte m_asymm_key[DEF_ASYM_KEY_SIZE];
+struct SysBase {
+    Byte m_seid[MAX_SEID_SIZE];
+    Byte m_rand[DEF_RAND_CODE_SIZE];
+};
+
+struct ExtraData {
+    Int32 m_sess_key_size;
+    Byte m_sess_key[MAX_SYM_KEY_SIZE];
+    Byte m_peer_seid[MAX_SEID_SIZE];    
+    Byte m_rand1[DEF_RAND_CODE_SIZE];
+    Byte m_rand2[DEF_RAND_CODE_SIZE];
 };
 
 struct NodeBase {
@@ -37,19 +48,10 @@ struct NodeBase {
     Int32 m_node_type;
 };
 
-struct TcpPairs {
-    NodeBase m_base;
-
-    TcpParam m_local;
-    TcpParam m_peer;
-};
-
 struct EventData {
     NodeBase m_base;
 
-    list_head m_cmd_que;
     FdInfo* m_fdinfo;
-    Uint32 m_event_atom;
 };
 
 struct TimerData {
@@ -62,12 +64,10 @@ struct TimerData {
 struct ListenerTcp {
     NodeBase m_base;
 
-    EkeyBase* m_ekey; // this is aggregation of listener
     FdInfo* m_fdinfo;
     UserConn* m_user; // this is the child of listener
     
-    const TcpPairs* m_tcp_pairs;
-    Bool m_tunnel_ok;
+    const TcpPairs* m_pairs; 
 };
 
 struct ListenerDirty {
@@ -75,21 +75,9 @@ struct ListenerDirty {
     
     list_head m_usr_que;
 
-    EkeyBase* m_ekey;
     FdInfo* m_fdinfo;
     
-    const TcpPairs* m_tcp_pairs;
-};
-
-struct ListenerAdmin {
-    NodeBase m_base;
-    
-    list_head m_admin_que;
-
-    EkeyBase* m_ekey;
-    FdInfo* m_fdinfo; 
-    
-    const TcpPairs* m_tcp_pairs;
+    const TcpParam* m_param;
 };
 
 struct UserAccpt {
@@ -99,11 +87,13 @@ struct UserAccpt {
 
     ListenerDirty* m_parent;
     FdInfo* m_fdinfo;
+    const TcpParam* m_param;
 
     Uint32 m_user_id;
     Int32 m_usr_status;
 
     SockBase m_sock;
+    ExtraData m_extra_data;
     EvpBase* m_evp_rcv;
     EvpBase* m_evp_snd;
 };
@@ -111,16 +101,19 @@ struct UserAccpt {
 struct UserConn {
     NodeBase m_base; // used by user queue
     
+    list_head m_listener_que;
     order_list_head m_session_que; // tcp accept sessions 
 
-    ListenerTcp* m_parent;
-    FdInfo* m_fdinfo;
-
+    FdInfo* m_fdinfo; 
+    const TcpParam* m_param;
+    
     Uint32 m_user_id;
-    Uint32 m_last_session_id;
     Int32 m_usr_status;
+    Bool m_connected;
+    Bool m_peer_open;
 
     SockBase m_sock;
+    ExtraData m_extra_data;
     EvpBase* m_evp_rcv;
     EvpBase* m_evp_snd;
 };
@@ -131,9 +124,10 @@ struct SessionAccpt {
 
     UserConn* m_parent;
     FdInfo* m_fdinfo;
+    const TcpPairs* m_pairs;
     
     Uint32 m_session_id;
-    Int32 m_status;
+    Bool m_peer_open;
 
     SockBase m_sock;
 };
@@ -145,43 +139,19 @@ struct SessionConn {
     FdInfo* m_fdinfo;
     
     Uint32 m_session_id;
-    Int32 m_status;
+    Bool m_peer_open;
+    Bool m_connected;
 
+    TcpParam m_param;
     SockBase m_sock;
 };
 
-struct AdminConn;
-
-struct AdminAccpt {
-    NodeBase m_base; 
-
-    ListenerAdmin* m_parent;
-    FdInfo* m_fdinfo;
-    AdminConn* m_child;
-    
-    Uint32 m_admin_id;
-    Int32 m_admin_status;
-
-    SockBase m_sock;
-};
-
-struct AdminConn {
-    NodeBase m_base; 
-    
-    AdminAccpt* m_parent;
-    FdInfo* m_fdinfo;
-    
-    Int32 m_admin_status;
-
-    SockBase m_sock;
-};
 
 struct ListenerRouter {
     NodeBase m_base;
     
     list_head m_route_pair_que;
 
-    EkeyBase* m_ekey;
     FdInfo* m_fdinfo;
 
     Int32 m_enc_type; // check if encrypt or decrypt 
@@ -189,12 +159,15 @@ struct ListenerRouter {
     const TcpPairs* m_tcp_pairs;
 };
 
+
 struct Router {
     FdInfo* m_fdinfo;
     
     Int32 m_usr_status;
+    Bool m_peer_open;
 
     SockBase m_sock;
+    ExtraData m_extra_data;
     EvpBase* m_evp_rcv;
     EvpBase* m_evp_snd;
 };
@@ -205,6 +178,7 @@ struct RouterPair {
     ListenerRouter* m_parent;
 
     Uint32 m_router_id;
+    Bool m_connected;
     
     Router m_router_in;
     Router m_router_out;
@@ -212,8 +186,12 @@ struct RouterPair {
 
 
 struct FdInfo { 
-    list_node m_io_node; 
-    list_node m_deal_node; 
+    struct Task m_wr_task;
+    struct Task m_mng_task;
+    struct Task m_deal_task; 
+
+    list_node m_run_node;
+    list_node m_rd_node;
 
     list_head m_rd_que;
     list_head m_wr_que;
@@ -222,82 +200,39 @@ struct FdInfo {
     list_head m_send_que;
     list_head m_recv_que;
 
-    Void* m_io_data;
-    Void* m_deal_data;
+    NodeBase* m_data;
     
     Int32 m_fd;
-    Int32 m_rd_type;
-    Int32 m_wr_type;
-    Int32 m_deal_type;
+    Int32 m_fd_type;
     
     Bool m_test_rd; 
+    Bool m_rd_err;
     Bool m_test_wr; 
     Bool m_can_wr;
-    Bool m_more_wr;
-    
     Bool m_wr_err;
-    Bool m_rd_err;
-    Bool m_peer_err;
-
-    Bool m_is_dealing;
+    
+    Bool m_io_run;
+    Bool m_deal_err; 
+    Bool m_closing;
 };
 
-enum EnumNodeType {
-    ENUM_NODE_TCP_LISTENER,
-    ENUM_NODE_DIRTY_LISTENER,
-    ENUM_NODE_ROUTER_LISTENER,
-    ENUM_NODE_ADMIN_LISTENER,
+enum EnumNodeType { 
+    ENUM_NODE_AGENT_CLI = 0,
+    ENUM_NODE_AGENT_SRV,
+    ENUM_NODE_ADDR,
+    ENUM_NODE_ADDR_PAIRS, 
+    ENUM_NODE_SESS_LISTENER,
+    
+    ENUM_NODE_USR_LISTENER,
     ENUM_NODE_SESS_ACCPT,
     ENUM_NODE_SESS_CONN,
-    ENUM_NODE_USER_ACCPT,
-    ENUM_NODE_USER_CONN,
-    ENUM_NODE_ROUTER_PAIR,
-    ENUM_NODE_ROUTER_ACCPT,
-    ENUM_NODE_ROUTER_CONN,
-    ENUM_NODE_ADMIN_ACCPT,
-    ENUM_NODE_ADMIN_CONN,
-
-    ENUM_NODE_EVENT_CMD,
-    ENUM_NODE_TIMER,
+    ENUM_NODE_USR_ACCPT,
+    ENUM_NODE_USR_CONN, 
+    
+    ENUM_NODE_EVENT,
+    ENUM_NODE_TIMER, 
 
     ENUM_NODE_END
-};
-
-enum EnumRdType {
-    ENUM_RD_EVENT_CMD,
-    ENUM_RD_TIMER,
-    ENUM_RD_TCP_LISTENER,
-    ENUM_RD_DIRTY_LISTENER,
-    ENUM_RD_ROUTER_LISTENER,
-    ENUM_RD_ADMIN_LISTENER,
-    ENUM_RD_TCP_RAW,
-    ENUM_RD_DIRTY_MSG,
-
-    ENUM_RD_END
-};
-
-enum EnumWrType {
-    ENUM_WR_TCP_CONNECTING,
-    ENUM_WR_DIRTY_CONNECTING,
-    ENUM_WR_ROUTER_CONNECTING,
-    ENUM_WR_SOCK_MSG,
-
-    ENUM_WR_END
-};
-
-enum EnumDealType {
-    ENUM_DEAL_SESSION_IN,
-    ENUM_DEAL_SESSION_OUT,
-    ENUM_DEAL_USER_IN,
-    ENUM_DEAL_USER_OUT,
-
-    ENUM_DEAL_ROUTER_IN,
-    ENUM_DEAL_ROUTER_OUT,
-
-    ENUM_DEAL_ADMIN_IN,
-    ENUM_DEAL_ADMIN_OUT,
-
-    ENUM_DEAL_END
 };
 
 
@@ -325,10 +260,17 @@ enum EnumErrCode {
     ENUM_ERR_SESS_ALREADY_EXISTS,
     ENUM_ERR_CONN_SESSEION,
     ENUM_ERR_INVALID_SESS,
+    ENUM_ERR_DECRYPT_TXT,
+    ENUM_ERR_ENCRYPT_TXT,
     ENUM_ERR_NOT_LOGIN_GATEWAY,
     ENUM_ERR_NOT_LOGIN_USER,
     ENUM_ERR_AUTH_GATEWAY,
+    ENUM_ERR_AUTH_STATUS_INVALID,
+    ENUM_ERR_PARSE_AUTH_REQ,
+    ENUM_ERR_OPER_EKEY,
+    ENUM_ERR_CREAT_EXCHG_KEY,
     ENUM_ERR_START_CONN_GATEWAY,
+    ENUM_ERR_GATEWAY_STOP,
 
     ENUM_ERR_PEER_NOT_READY,
     ENUM_ERR_SEND_MSG,

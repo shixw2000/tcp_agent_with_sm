@@ -1,41 +1,17 @@
 #include<string.h>
 #include<stdlib.h>
 #include<stdio.h>
+#include<signal.h>
 #include"testcase.h"
-#include"managecenter.h"
-#include"msgcenter.h"
 #include"smutil.h"
 #include"msgtype.h"
-#include"server.h"
+#include"msgcenter.h"
+#include"taskservice.h"
+#include"ticktimer.h"
+#include"cthread.h"
+#include"sockmng.h"
+#include"sockcenter.h"
 
-
-Int32 creatAgent(int argc, char* argv[]) {
-    Int32 ret = 0;
-    Server* srv = NULL;
-
-    I_NEW(Server, srv);
-
-    if (3 == argc) {
-        srv->set(argv[2]);
-    }
-    
-    ret = srv->init();
-    if (0 != ret) {
-        return ret;
-    }
-
-    
-
-    ret = srv->startServer();
-    if (0 != ret) {
-        return -1;
-    }
-
-    srv->wait();
-    srv->finish();
-
-    return 0;
-}
 
 Void testSm3() {
     Int32 ret = 0;
@@ -90,10 +66,10 @@ Void testSm4() {
 
 void test_crc() {
     MsgHdr* hdr = NULL;
-    MsgStartPeer* msg = NULL;    
+    MsgSessHead* msg = NULL;    
 
-    hdr = MsgCenter::creat<MsgStartPeer>(ENUM_MSG_CMD_START_PEER);
-    msg = MsgCenter::cast<MsgStartPeer>(hdr);
+    hdr = MsgCenter::creat<MsgSessHead>(ENUM_MSG_SESS_ARRIVAL);
+    msg = MsgCenter::cast<MsgSessHead>(hdr);
 
     msg->m_user_id = 13432;
     msg->m_session_id = 112343432;
@@ -128,21 +104,150 @@ Void test_hex() {
     
 }
 
+void test_sig() {
+    const int cnt = 3;
+    int ret = 0;
+    int max = 10000000;
+    int prnt_mask = (1<<20)-1;
+    struct Task tasks[cnt];
+    TestTasker* tester[cnt] = {NULL};
+    
+    for (int i=0; i<cnt; ++i) {
+        INIT_TASK(&tasks[i]);
+        
+        tester[i] = new TestTasker(max, prnt_mask, 0);
+
+        ret = tester[i]->init();
+        if (0 != ret) {
+            return;
+        } 
+    }
+
+    for (int i=0; i<cnt; ++i) {
+        tester[i]->setNext(tester[(i+1)%cnt]); 
+    } 
+    
+    for (int i=0; i<cnt; ++i) {
+        ret = tester[i]->start("test");
+        if (0 != ret) {
+            return;
+        }
+    }
+
+    sleepSec(1);
+    
+    for (int i=0; i<1; ++i) {
+        tester[i]->addTask(&tasks[i], BIT_EVENT_NORM);
+    }
+
+    for (int i=0; i<cnt; ++i) {
+        //tester[i]->stop();
+        tester[i]->join();
+        tester[i]->finish();
+    }
+}
+
+
+class TestTimer : public I_TimerDealer {
+public:
+    virtual Void doTimeout(struct TimerEle* ele) {
+        LOG_INFO("do_timeout| tick=%u| time=%u|",
+            ele->m_base->monoTick(),
+            ele->m_base->now());
+
+        updateTimer(ele);
+    }
+};
+
+void test_timer() {
+    TickTimer* timer = NULL;
+    TestTimer* dealer = NULL;
+    long timeout = 2000;
+    int max = 200000;
+    struct TimerEle ele;
+
+    timer = new TickTimer;
+    dealer = new TestTimer;
+    timer->setDealer(dealer);
+
+    INIT_TIMER_ELE(&ele);
+
+    ele.m_type = 0;
+    ele.m_interval = timeout;
+    timer->addTimer(&ele);
+
+    for (int i=0; i<max; ++i) {
+        timer->tick(1);
+    }
+
+    timer->delTimer(&ele);
+    timer->stop();
+    delete timer;
+    delete dealer;
+}
+
+static void signon(int sig) {
+}
+
+static void mask_sig() {
+    /* nothing */
+    maskSig(SIGUSR1);
+    armSig(SIGUSR1, &signon);
+}
+
+void testAgent(const char* path) {
+    Int32 ret = 0;
+    SockCenter* center = NULL;
+
+    do {
+        I_NEW(SockCenter, center);
+        center->set(path);
+        ret = center->init();
+        if (0 != ret) {
+            break;
+        }
+
+        ret = center->startServer();
+        if (0 != ret) {
+            break;
+        }
+
+        center->wait();
+    } while (0);
+
+    center->finish();
+    return;
+}
+
+
 int test_main(int argc, char* argv[]) {
     int ret = 0;
     int opt = 0;
 
+    mask_sig();
+
     opt = atoi(argv[1]);
-    if (1 == opt) {
-        test_hex();
+    if (0 == opt) {
+        if (4 == argc) {
+        }
+    } else if (1 == opt) {
+        if (3 == argc) {
+            testAgent(argv[2]);
+        }
     } else if (2 == opt) {
         testSm4();
     } else if (3 == opt) {
         test_crc();
     } else if (4 == opt) {
         testSm3();
+    } else if (5 == opt) {
+    } else if (6 == opt) {
+        test_hex();
+    } else if (7 == opt) {
+        test_sig();
+    } else if (8 == opt) {
+        test_timer();
     } else {
-        ret = creatAgent(argc, argv);
     }
 
     return ret;

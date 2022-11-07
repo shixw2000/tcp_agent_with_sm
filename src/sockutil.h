@@ -14,6 +14,7 @@ Int32 creatTcpCli(const Char peer_ip[], int peer_port);
 
 Int32 setNonBlock(Int32 fd);
 Int32 setReuse(Int32 fd);
+Void setNoTimewait(int fd);
 
 Int32 creatAddr(const Char ip[], int port, Void* addr, Int32* plen);
 Int32 buildParam(const Char ip[], Int32 port, TcpParam* param);

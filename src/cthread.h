@@ -1,81 +1,45 @@
 #ifndef __CTHREAD_H__
 #define __CTHREAD_H__
-#include"globaltype.h"
+#include"interfobj.h"
 
 
-class CThread {
+class CThread : public I_Service {
+    struct _intern;
+    
 public:
     CThread();
     virtual ~CThread();
 
-    virtual int start(const char name[]);
-    virtual void stop();
+    unsigned long getThr() const;
+
+    int start(const char name[], I_Service* service = NULL);
     
     void join(); 
 
-    Bool isRun() const {
-        return m_isRun;
-    }
+    virtual int run() {
+        int ret = 0;
+        
+        if (NULL != m_service) {
+            ret = m_service->run();
+        }
 
-protected:
-    virtual Int32 run() = 0;
+        return ret;
+    }
 
 private:
     static void* activate(void* arg);
     
 private:
-    Uint64 m_thr;
-    Bool m_isRun;
-    char m_name[32];
+    struct _intern* m_intern;
+    I_Service* m_service;
 };
 
 
-class CService;
-class I_Worker {
-public:
-    virtual ~I_Worker() {}
-
-    virtual Int32 work() = 0;
-};
-
-class CService : public CThread {
-public:
-    CService();
-
-    Void set(I_Worker* worker); 
-
-private:
-    virtual int run();  
-
-private:
-    I_Worker* m_worker;
-};
-
-
-class EventService : public CThread {
-public:
-    EventService();
-    virtual ~EventService();
-    
-    virtual void stop();
-    
-    void signal(); 
-    
-protected:     
-    virtual void alarm(); 
-    virtual void pause(Int32 ms);
-
-    virtual Int32 consume() = 0;
-
-private:
-    virtual int run();
-    int doService();
-
-private:
-    Uint32 m_atom;
-    Int32 m_event_fd;
-};
-
+int getTid();
+void maskSig(int sig);
+void armSig(int sig, void (*)(int));
+void sleepSec(int sec);
+void getRand(void* buf, int len);
 
 #endif
 

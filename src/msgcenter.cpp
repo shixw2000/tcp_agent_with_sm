@@ -39,6 +39,7 @@ Int32 MsgCenter::addCrc(MsgHdr* msg) {
     intern = msg2Intern(msg); 
 
     if (msg->m_size == intern->m_size) {
+        msg->m_crc = 0;
         msg->m_crc = calcCrc(msg, msg->m_size);
 
         LOG_DEBUG("++++add_crc| _capacity=%d| _size=%d|"
@@ -121,13 +122,6 @@ void MsgCenter::emerge(MsgHdr* msg, list_head* head) {
     list_add_front(&intern->m_node, head);
 }
 
-void MsgCenter::add(MsgHdr* msg, order_list_head* head) {
-    _internal* intern = NULL;
-
-    intern = msg2Intern(msg);
-    order_list_add(&intern->m_node, head); 
-}
-
 Uint32 MsgCenter::seqno() {
     static Uint32 g_seq = sysRand();
     Uint32 n = 0;
@@ -149,13 +143,12 @@ MsgHdr* MsgCenter::prepend(Int32 len) {
         memset(buf, 0, total);
         
         intern = (_internal*)buf; 
-        hdr = (MsgHdr*)(intern + 1);
-        
         INIT_LIST_NODE(&intern->m_node);
         intern->m_capacity = len;
         intern->m_size = len;
         intern->m_pos = 0;
 
+        hdr = (MsgHdr*)(intern + 1);
         return hdr;
     } else {
         return NULL;
@@ -280,7 +273,9 @@ Void MsgCenter::setbufpos(Int32 pos, MsgHdr* msg) {
     _internal* intern = NULL;
 
     intern = msg2Intern(msg);
-    intern->m_pos = pos;
+    if (pos <= intern->m_size) {
+        intern->m_pos = pos;
+    }
 }
 
 Void MsgCenter::printMsg(const Char* prompt, MsgHdr* msg) {

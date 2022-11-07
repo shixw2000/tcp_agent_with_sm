@@ -4,19 +4,12 @@
 #include"msgcenter.h"
 #include"listnode.h"
 #include"sockutil.h"
-#include"managecenter.h"
+#include"interfobj.h"
 
 
-static Char g_buf[DEF_TCP_MAX_BUF_SIZE];
+Char SockOper::g_buf[DEF_TCP_MAX_BUF_SIZE];
 
-SockOper::SockOper(ManageCenter* mng) {
-    m_mng = mng;
-}
-
-SockOper::~SockOper() {
-}
-
-Int32 SockOper::readTcpRaw(FdInfo* info, SockBase*) {
+Int32 SockOper::readTcpRaw(FdInfo* info, SockBase*, I_Dispatcher* mng) {
     Int32 rdlen = 0;
     MsgHdr* msg = NULL;
     MsgTcpPlain* tcpData = NULL;
@@ -37,7 +30,7 @@ Int32 SockOper::readTcpRaw(FdInfo* info, SockBase*) {
         
         MsgCenter::reopen(msg);
         
-        m_mng->dispatchMsg(info, msg);
+        mng->dispatch(info, msg);
         rdlen = recvTcp(info->m_fd, g_buf, DEF_TCP_MAX_BUF_SIZE);
     }
 
@@ -48,7 +41,51 @@ Int32 SockOper::readTcpRaw(FdInfo* info, SockBase*) {
     }
 }
 
-Int32 SockOper::readSock(FdInfo* info, SockBase* sock) {
+/* return: 0-ok, 1-blocking write, other: error */
+Int32 SockOper::writeTcpRaw(FdInfo* info, SockBase* sock) {
+    Int32 ret = 0;
+    list_node* pos = NULL;
+
+    while (TRUE) {
+        if (NULL == sock->m_curr_snd) {
+            if (!list_empty(&info->m_wr_que)) {
+                pos = LIST_FIRST(&info->m_wr_que);
+                list_del(pos, &info->m_wr_que); 
+                
+                sock->m_curr_snd = MsgCenter::node2msg(pos);
+
+                if (ENUM_MSG_CMD_TCP_PLAIN == sock->m_curr_snd->m_cmd) {
+                    /* offset my header before send */
+                    MsgCenter::offsetTcpRaw(sock->m_curr_snd);
+                } else {
+                    /* invalid msg to send */
+                    return -2;
+                }
+            } else {
+                /* send all and ok */
+                return 0;
+            }
+        }
+
+        ret = writeMsg(info->m_fd, sock->m_curr_snd);
+        if (0 == ret) {
+            MsgCenter::printMsg("write_sock_msg", sock->m_curr_snd);
+            
+            MsgCenter::free(sock->m_curr_snd);
+            
+            sock->m_curr_snd = NULL;
+            continue;
+        } else if (1 == ret) {
+            /* can not send more */
+            return 1;
+        } else {
+            /* error */
+            return -1;
+        }
+    }
+}
+
+Int32 SockOper::readSock(FdInfo* info, SockBase* sock, I_Dispatcher* mng) {
     Int32 rdlen = 0;
     Int32 used = 0;
     Int32 left = 0;
@@ -60,7 +97,7 @@ Int32 SockOper::readSock(FdInfo* info, SockBase* sock) {
         left = rdlen;
 
         while (0 < left) {
-            used = parse(psz, left, info, sock);
+            used = parse(psz, left, info, sock, mng);
             if (0 <= used) {
                 psz += used;
                 left -= used; 
@@ -82,7 +119,7 @@ Int32 SockOper::readSock(FdInfo* info, SockBase* sock) {
     }
 }
 
-/* return: 1: write all completed, 0: uncompleted, -1: error */
+/* return: 0-ok, 1-blocking write, other: error */
 Int32 SockOper::writeSock(FdInfo* info, SockBase* sock) {
     Int32 ret = 0;
     list_node* pos = NULL;
@@ -95,28 +132,30 @@ Int32 SockOper::writeSock(FdInfo* info, SockBase* sock) {
                 
                 sock->m_curr_snd = MsgCenter::node2msg(pos);
             } else {
-                return 1;
+                return 0;
             }
         }
 
         ret = writeMsg(info->m_fd, sock->m_curr_snd);
-        if (1 == ret) {
+        if (0 == ret) {
             MsgCenter::printMsg("write_sock_msg", sock->m_curr_snd);
             
             MsgCenter::free(sock->m_curr_snd);
             
             sock->m_curr_snd = NULL;
             continue;
-        } else if (0 == ret) {
-            return 0;
+        } else if (1 == ret) {
+            /* send blocking */
+            return 1;
         } else {
+            /* error */
             return -1;
         }
     }
 }
 
 
-/* return: 1: write end, 0: uncompleted, -1: error */
+/* return: 0: write end, 1: uncompleted, -1: error */
 Int32 SockOper::writeMsg(Int32 fd, MsgHdr* msg) {
     Int32 size = 0;
     Int32 used = 0;
@@ -137,13 +176,13 @@ Int32 SockOper::writeMsg(Int32 fd, MsgHdr* msg) {
         MsgCenter::setbufpos(used, msg); 
             
         if (sndlen == left) {
-            return 1;
+            return 0;
         } else { 
             LOG_DEBUG("writeMsg| fd=%d| size=%d| used=%d|"
                 " left=%d| sndlen=%d| msg=sendTcp|",
                 fd, size, used, left, sndlen);
                 
-            return 0;
+            return 1;
         }
     } else {
         LOG_ERROR("****writeMsg| fd=%d| size=%d| used=%d|"
@@ -164,7 +203,8 @@ Bool SockOper::chkHeader(const MsgHdr* hdr) {
     }
 }
 
-Int32 SockOper::parse(const Char* buf, int len, FdInfo* info, SockBase* sock) {
+Int32 SockOper::parse(const Char* buf, int len, FdInfo* info, 
+    SockBase* sock, I_Dispatcher* mng) {
     Int32 left = 0;
     Int32 used = 0;
     Bool bOk = TRUE;
@@ -178,7 +218,7 @@ Int32 SockOper::parse(const Char* buf, int len, FdInfo* info, SockBase* sock) {
             sock->m_hdr_len = DEF_MSG_HEADER_SIZE;
             sock->m_curr_rcv = MsgCenter::prepend(hdr->m_size);
             if (NULL != sock->m_curr_rcv) {
-                used = fill(buf, len, info, sock);
+                used = fill(buf, len, info, sock, mng);
                 return used;
             } else {
                 return -1;
@@ -207,7 +247,7 @@ Int32 SockOper::parse(const Char* buf, int len, FdInfo* info, SockBase* sock) {
                 MsgCenter::fillMsg(sock->m_buf, DEF_MSG_HEADER_SIZE, sock->m_curr_rcv);
 
                 /* file body */
-                used = fill(buf, len, info, sock);
+                used = fill(buf, len, info, sock, mng);
                 return left + used;
             } else {
                 LOG_ERROR("parse_buffer| hdr_size=0x%x| version=0x%x|"
@@ -224,12 +264,13 @@ Int32 SockOper::parse(const Char* buf, int len, FdInfo* info, SockBase* sock) {
         }
     } else {
         /* fullfil the msg */
-        used = fill(buf, len, info, sock);
+        used = fill(buf, len, info, sock, mng);
         return used;
     }
 }
 
-Int32 SockOper::fill(const Char* buf, int len, FdInfo* info, SockBase* sock) {
+Int32 SockOper::fill(const Char* buf, int len, FdInfo* info, 
+    SockBase* sock, I_Dispatcher* mng) {
     Int32 used = 0;
     Bool eom = FALSE;
 
@@ -239,7 +280,7 @@ Int32 SockOper::fill(const Char* buf, int len, FdInfo* info, SockBase* sock) {
         MsgCenter::printMsg("read_sock_msg", sock->m_curr_rcv);
         MsgCenter::reopen(sock->m_curr_rcv);
 
-        m_mng->dispatchMsg(info, sock->m_curr_rcv);
+        mng->dispatch(info, sock->m_curr_rcv);
         
         sock->m_curr_rcv = NULL;
         sock->m_hdr_len = 0; 

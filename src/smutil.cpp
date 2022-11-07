@@ -222,13 +222,13 @@ Int32 Sm4Util::sm4_ecb_decrypt(const Void* data,
 Void printHex(const Char* prompt, const Void* data, int len) {
     const Byte* psz = (const Byte*)data;
     
-    fprintf(stdout, "====%s| len=%d|\n", prompt, len);
+    RAW_LOG("====%s| len=%d|\n", prompt, len);
     
     for (int i=0; i<len; ++i) {
-        fprintf(stdout, "%02X", psz[i]);
+        RAW_LOG("%02X", psz[i]);
     }
 
-    fprintf(stdout, "\n");
+    RAW_LOG("\n");
 }
 
 static Int32 hexchar2Int(Char c) {

@@ -1,39 +1,25 @@
 #ifndef __SOCKDEALER_H__
 #define __SOCKDEALER_H__
 #include"globaltype.h"
-#include"listnode.h"
-#include"cthread.h"
+#include"taskpool.h"
 
 
 struct FdInfo;
-struct MsgHdr;
-class ManageCenter;
-class MutexCond;
+class SockMng;
 
-class SockDealer : public I_Worker { 
+class SockDealer : public TaskPool { 
 public:
-    explicit SockDealer(ManageCenter* mng);
+    explicit SockDealer(SockMng* mng);
     ~SockDealer();
 
     Int32 init();
     Void finish(); 
 
-    Int32 dispatchMsg(FdInfo* info, MsgHdr* msg); 
+    virtual void procTaskEnd(struct Task* task);
+    virtual unsigned int procTask(struct Task* task); 
 
-    void stopWork();
-
-private:
-    virtual Int32 work(); 
-
-    Void addRunQue(FdInfo* info);
-    Void dealFd(FdInfo* info);
-
-private: 
-    list_head m_lock_list;
-    
-    ManageCenter* m_mng;
-    MutexCond* m_cond;
-    Bool m_stoped;
+private:     
+    SockMng* m_mng;
 };
 
 #endif 

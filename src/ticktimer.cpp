@@ -1,16 +1,10 @@
 #include<string.h>
+#include"globaltype.h"
 #include"ticktimer.h"
 
 
-struct TimerEle {
-    hlist_node m_node;
-    Uint32 m_expires;
-    TimerCb m_pf;
-    Void* m_p1;
-    Void* m_p2;
-};
-
 TickTimer::TickTimer() {
+    m_dealer = NULL;
     m_size = 0;
     m_tick = 0;
     m_time = 0;
@@ -30,75 +24,50 @@ Void TickTimer::stop() {
     for (int i=0; i<TV_1_SIZE; ++i) {
         hlist_for_each_entry_safe(ele, pos, n, &m_tv1[i], m_node) {
             hlist_del(pos);
-
-            I_FREE(ele);
         }
     }
 
     for (int i=0; i<TV_2_SIZE; ++i) {
         hlist_for_each_entry_safe(ele, pos, n, &m_tv2[i], m_node) {
             hlist_del(pos);
-
-            I_FREE(ele);
         }
     }
 }
 
-Void* TickTimer::creatTimer(TimerCb pf, Void* p1, Void* p2) { 
-    TimerEle* ele = NULL;
-
-    I_NEW(TimerEle, ele);
-    
-    if (NULL != ele) {
-        memset(ele, 0, sizeof(*ele));
-
-        INIT_HLIST_NODE(&ele->m_node);
-        ele->m_pf = pf;
-        ele->m_p1 = p1;
-        ele->m_p2 = p2;
-    }
-
-    return ele;
+Void TickTimer::addTimer(struct TimerEle* ele) {     
+    modTimer(ele, ele->m_interval);
 }
 
-Void TickTimer::delTimer(Void* timer) {
-    TimerEle* ele = reinterpret_cast<TimerEle*>(timer);
-    
-    stopTimer(timer);
-
-    I_FREE(ele);
-}
-
-Void TickTimer::resetTimer(Void* timer, Uint32 timeout) {
-    stopTimer(timer);
-    startTimer(timer, timeout);
-}
-
-Void TickTimer::stopTimer(Void* timer) {
-    TimerEle* ele = reinterpret_cast<TimerEle*>(timer);
-    
+Void TickTimer::delTimer(struct TimerEle* ele) {
     if (!hlist_unhashed(&ele->m_node)) {
         hlist_del(&ele->m_node);
 
-        --m_size;
+        if (ele->m_base == this) {
+            --m_size;
+        }
     }
 }
 
-Void TickTimer::startTimer(Void* timer, Uint32 tick) {
-    TimerEle* ele = reinterpret_cast<TimerEle*>(timer);
+Void TickTimer::modTimer(struct TimerEle* ele, Uint32 timeout) {
     Int32 index = 0;
-    Uint32 timeout = tick + m_tick;
     
-    if (TV_1_SIZE > tick) { 
-        ele->m_expires = 0;
-        index = timeout & TV_1_MASK;
+    this->delTimer(ele);
+
+    ele->m_interval = timeout;
+    ele->m_expires = m_tick + ele->m_interval;
+
+    if (TV_1_SIZE > timeout) { 
+        index = ele->m_expires & TV_1_MASK;
         hlist_add(&ele->m_node, &m_tv1[index]);
     } else { 
-        ele->m_expires = timeout & TV_1_MASK;
-        index = (timeout >> TV_1_BITS) & TV_2_MASK; 
+        index = (ele->m_expires >> TV_1_BITS) & TV_2_MASK; 
         hlist_add(&ele->m_node, &m_tv2[index]);
     }
 
+    if (ele->m_base != this) {
+        ele->m_base = this;
+    }
+    
     ++m_size;
 }
 
@@ -125,14 +94,14 @@ void TickTimer::tick(Uint32 cnt) {
             hlist_for_each_entry_safe(ele, pos, n, &m_tv2[i2], m_node) {
                 hlist_del(pos);
                 
-                next = (m_tick + ele->m_expires) & TV_1_MASK;
+                next = ele->m_expires & TV_1_MASK;
                 hlist_add(pos, &m_tv1[next]);
             }
         }
     } 
 
     if (!hlist_empty(&m_tv1[i1])) {
-        hlist_move(&m_tv1[i1], &list); 
+        hlist_replace(&m_tv1[i1], &list); 
     
         hlist_for_each_entry_safe(ele, pos, n, &list, m_node) {
             hlist_del(pos); 
@@ -143,10 +112,8 @@ void TickTimer::tick(Uint32 cnt) {
     }
 }
 
-Void TickTimer::doTimer(Void* data) {
-    TimerEle *ele = (TimerEle*)data;
-    
-    ele->m_pf(ele->m_p1, ele->m_p2);
+Void TickTimer::doTimer(struct TimerEle* ele) {
+    m_dealer->doTimeout(ele);
 }
 
 

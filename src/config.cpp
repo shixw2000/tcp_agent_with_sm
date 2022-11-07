@@ -7,10 +7,12 @@
 #include"sockutil.h"
 
 
+const Byte* g_test_seid = NULL;
+
 Parser::Parser() {
     memset(&m_config, 0, sizeof(m_config));
 
-    INIT_LIST_HEAD(&m_config.m_tcp_pair_list);
+    INIT_LIST_HEAD(&m_config.m_agent_list);
 }
 
 Parser::~Parser() {
@@ -31,9 +33,17 @@ Int32 Parser::init(const Char* path) {
         return ret;
     }
 
-    ret = analyse();
+    ret = analyseGlobal();
     if (0 != ret) {
-        LOG_ERROR("analyse_config| ret=%d| path=%s| msg=parse error|",
+        LOG_ERROR("analyse_global| ret=%d| path=%s| msg=parse error|",
+            ret, path);
+        
+        return ret;
+    }
+
+    ret = analyseAgent();
+    if (0 != ret) {
+        LOG_ERROR("analyse_listener| ret=%d| path=%s| msg=parse error|",
             ret, path);
         
         return ret;
@@ -43,7 +53,7 @@ Int32 Parser::init(const Char* path) {
 }
 
 Void Parser::finish() {
-    freeTcpPairs(&m_config.m_tcp_pair_list);
+    freeAgents(&m_config.m_agent_list);
 }
 
 Void Parser::strip(Char* text) {
@@ -201,73 +211,213 @@ Int32 Parser::parse(const Char* path) {
     return ret;
 }
 
-Int32 Parser::analyse() {
+Int32 Parser::parseAddr(TcpParam* param, Char* url) {
     Int32 ret = 0;
-    Int32 cnt = 0;
-    Int32 len = 0;
-    Char* psz = NULL;
-    Int32 gateway_type = 0;
-    typeConfItr itrConf;
-    typeMapItr itrKey;
-    Char sec[MAX_LINE_LEN] = {0};
-    Char szLocalIp[DEF_IP_SIZE] = {0}; 
-    Int32 localPort = 0;
-    Char szPeerIp[DEF_IP_SIZE] = {0};
-    Int32 peerPort = 0;
+    Int32 port = 0;
+    char* psz = NULL;
     
-    len = strnlen(DEF_GATEWAY_SEC_PRE, MAX_LINE_LEN);
-    strncpy(sec, DEF_GATEWAY_SEC_PRE, len + 1);
-    psz = &sec[len];
-    
-    do {
-        snprintf(psz, 8, "%d", (Byte)(cnt + 1));
-        itrConf = m_conf.find(sec);
-        if (m_conf.end() == itrConf) {
-            break;
-        }
+    psz = strrchr(url, ':');
+    if (NULL != psz) {
+        *psz++ = '\0';
+        port = atoi(psz);
 
-        typeMap& imap = itrConf->second;
-
-        ret = getKeyInt(imap, DEF_GATEWAY_TYPE_KEY, &gateway_type);
-        if (0 != ret) {
-            break;
-        }
-
-        ret = getKeyStr(imap, DEF_LOCAL_IP_KEY, szLocalIp, DEF_IP_SIZE);
-        if (0 != ret) {
-            break;
-        }
-
-        ret = getKeyInt(imap, DEF_LOCAL_PORT_KEY, &localPort);
-        if (0 != ret) {
-            break;
-        }
-
-        ret = getKeyStr(imap, DEF_PEER_IP_KEY, szPeerIp, DEF_IP_SIZE);
-        if (0 != ret) {
-            break;
-        }
-
-        ret = getKeyInt(imap, DEF_PEER_PORT_KEY, &peerPort);
-        if (0 != ret) {
-            break;
-        }
-
-        ret = addTcpPairs(gateway_type, szLocalIp, localPort,
-            szPeerIp, peerPort);
-        if (0 != ret) {
-            break;
-        }
-
-        ++cnt;
-    } while (0 == ret);
-
-
-    if (0 == ret && 0 < cnt) {
-        return 0;
+        ret = buildParam(url, port, param);
+        return ret;
     } else {
         return -1;
     }
+}
+
+Int32 Parser::parseAgentSrv(typeMap& imap, list_head* list) {
+    Int32 ret = 0;
+    AgentSrv* obj = NULL;
+    Address* addr = NULL;
+    Char key[MAX_LINE_LEN] = {0};
+    Char url[DEF_ADDR_SIZE] = {0};
+
+    I_NEW(AgentSrv, obj);
+    
+    memset(obj, 0, sizeof(*obj));
+    INIT_LIST_NODE(&obj->m_base.m_node);
+    INIT_LIST_HEAD(&obj->m_binds); 
+    
+    obj->m_base.m_node_type = ENUM_NODE_AGENT_SRV;
+
+    /* add to list no matter if ok */
+    list_add_back(&obj->m_base.m_node, list);
+
+    for (int cnt = 0; ; ++cnt) {
+        I_NEW(Address, addr);
+        
+        memset(addr, 0, sizeof(*addr));
+        INIT_LIST_NODE(&addr->m_base.m_node);
+        addr->m_base.m_node_type = ENUM_NODE_ADDR;
+        
+        snprintf(key, MAX_LINE_LEN, "%s%d", DEF_ADDRESS_PRE_KEY, cnt + 1);
+        ret = getKeyStr(imap, key, url, DEF_ADDR_SIZE);
+        if (0 != ret) {
+            if (0 != cnt) {
+                /* end of address */
+                ret = 0;
+            } else {
+                ret = -1; 
+            }
+
+            break;
+        }
+
+        ret = parseAddr(&addr->m_param, url);
+        if (0 == ret) {
+            /* add a address */
+            list_add_back(&addr->m_base.m_node, &obj->m_binds);
+            addr = NULL;
+        } else {
+            ret = -1;
+            break;
+        }
+    }
+
+    I_FREE(addr);
+    return ret; 
+}
+
+Int32 Parser::parseAgentCli(typeMap& imap, list_head* list) {
+    Int32 ret = 0;
+    AgentCli* obj = NULL;
+    AddrPairs* pairs = NULL;
+    Char key[MAX_LINE_LEN] = {0};
+    Char url[DEF_ADDR_SIZE] = {0};
+
+    I_NEW(AgentCli, obj);
+    
+    memset(obj, 0, sizeof(*obj));
+    INIT_LIST_NODE(&obj->m_base.m_node);
+    INIT_LIST_HEAD(&obj->m_pairs); 
+    
+    obj->m_base.m_node_type = ENUM_NODE_AGENT_CLI;
+
+    /* add to list no matter if ok */
+    list_add_back(&obj->m_base.m_node, list);
+
+    ret = getKeyStr(imap, DEF_ORIGIN_KEY, url, DEF_ADDR_SIZE);
+    if (0 != ret) {
+        return ret;
+    }
+
+    ret = parseAddr(&obj->m_origin, url);
+    if (0 != ret) {
+        return ret;
+    }
+
+    for (int cnt = 0; ; ++cnt) {
+        I_NEW(AddrPairs, pairs);
+        
+        memset(pairs, 0, sizeof(*pairs));
+        INIT_LIST_NODE(&pairs->m_base.m_node);
+        pairs->m_base.m_node_type = ENUM_NODE_ADDR_PAIRS;
+        
+        snprintf(key, MAX_LINE_LEN, "%s%d", DEF_LOCAL_ADDR_PRE_KEY, cnt + 1);
+        ret = getKeyStr(imap, key, url, DEF_ADDR_SIZE);
+        if (0 != ret) { 
+            if (0 != cnt) {
+                /* end of address */
+                ret = 0;
+            } else {
+                ret = -1; 
+            }
+
+            break;
+        }
+
+        ret = parseAddr(&pairs->m_pairs.m_local, url);
+        if (0 != ret) {
+            break;
+        }
+
+        snprintf(key, MAX_LINE_LEN, "%s%d", DEF_PEER_ADDR_PRE_KEY, cnt + 1);
+        ret = getKeyStr(imap, key, url, DEF_ADDR_SIZE);
+        if (0 != ret) { 
+            break;
+        }
+
+        ret = parseAddr(&pairs->m_pairs.m_peer, url);
+        if (0 != ret) {
+            break;
+        }
+        
+        list_add_back(&pairs->m_base.m_node, &obj->m_pairs);
+    }
+
+    I_FREE(pairs);
+    return ret; 
+}
+
+Int32 Parser::analyseGlobal() {
+    Int32 ret = 0;
+    typeConfItr itrConf;
+    typeMapItr itrKey;
+
+    itrConf = m_conf.find(DEF_SEC_GLOBAL_NAME);
+    if (m_conf.end() == itrConf) {
+        return -1;
+    }
+
+    do {
+        typeMap& imap = itrConf->second;
+        
+        ret = getKeyStr(imap, DEF_KEY_PASSWD_NAME, m_config.m_passwd, 
+            MAX_PIN_PASSWD_SIZE);
+        if (0 != ret) {
+            LOG_ERROR("analyse_global| msg=invalid password|");
+            break;
+        } 
+    } while (0);
+
+    return ret;
+}
+
+Int32 Parser::analyseAgent() {
+    Int32 ret = 0;
+    Int32 type = 0;
+    typeConfItr itrConf;
+    typeMapItr itrKey;
+    Char sec[MAX_LINE_LEN] = {0};
+    
+    for (int cnt = 0; ; ++cnt) {
+        snprintf(sec, MAX_LINE_LEN, "%s%d", DEF_AGENT_SEC_PRE, cnt+1);
+        itrConf = m_conf.find(sec);
+        if (m_conf.end() == itrConf) {
+            if (0 < cnt) {
+                /* end of agent */
+                ret = 0;
+            } else {
+                ret = -1;
+            }
+            
+            break;
+        }
+
+        typeMap& imap = itrConf->second; 
+        
+        ret = getKeyInt(imap, DEF_AGENT_TYPE_KEY, &type);
+        if (0 != ret) {
+            break;
+        }
+
+        if (ENUM_NODE_AGENT_CLI == type) {
+            ret = parseAgentCli(imap, &m_config.m_agent_list);
+        } else if (ENUM_NODE_AGENT_SRV == type) {
+            ret = parseAgentSrv(imap, &m_config.m_agent_list);
+        } else {
+            ret = -1;
+        }
+
+        if (0 != ret) {
+            break;
+        } 
+    } 
+
+    return ret;
 }
 
 Int32 Parser::getKeyStr(typeMap& imap, const Char key[],
@@ -310,54 +460,46 @@ Int32 Parser::getKeyInt(typeMap& imap, const Char key[], Int32* val) {
     } 
 }
 
-Int32 Parser::addTcpPairs(Int32 type, 
-    const Char szLocalIp[], Int32 localPort, 
-    const Char szPeerIp[], Int32 peerPort) {
-    Int32 ret = 0;
-    TcpPairs* pairs = NULL;
-
-    do {
-        I_NEW(TcpPairs, pairs);
-        memset(pairs, 0, sizeof(*pairs));
-        INIT_LIST_NODE(&pairs->m_base.m_node);
-        
-        pairs->m_base.m_node_type = type;
-        
-        ret = buildParam(szLocalIp, localPort, &pairs->m_local);
-        if (0 != ret) {
-            break;
-        }
-
-        ret = buildParam(szPeerIp, peerPort, &pairs->m_peer);
-        if (0 != ret) {
-            break;
-        }
-
-        list_add_back(&pairs->m_base.m_node, &m_config.m_tcp_pair_list);
-
-        LOG_INFO("add_ip_param| type=%d| local_ip=%s| local_port=%d|"
-            " peer_ip=%s| peer_port=%d|",
-            type, szLocalIp, localPort,
-            szPeerIp, peerPort);
-        
-        return 0;
-    } while (0);
-
-    I_FREE(pairs);
-    return ret;
-}
-
-Void Parser::freeTcpPairs(list_head* list) {
-    list_node* pos = NULL;
-    list_node* n = NULL;
-    TcpPairs* pairs = NULL;
+Void Parser::freeAgents(list_head* list) {
+    list_node* pos1 = NULL;
+    list_node* n1 = NULL;
+    list_node* pos2 = NULL;
+    list_node* n2 = NULL;
+    NodeBase* base = NULL;
+    AgentCli* cli = NULL;
+    AgentSrv* srv = NULL;
+    Address* addr = NULL;
+    AddrPairs* pairs = NULL;
     
-    list_for_each_safe(pos, n, list) {
-        list_del(pos, list);
+    list_for_each_safe(pos1, n1, list) {
+        list_del(pos1, list);
 
-        pairs = (TcpPairs*)pos;
-        
-        I_FREE(pairs);
+        base = (NodeBase*)pos1;
+
+        if (ENUM_NODE_AGENT_CLI == base->m_node_type) {
+            cli = (AgentCli*)pos1;
+            
+            list_for_each_safe(pos2, n2, &cli->m_pairs) {
+                list_del(pos2, list);
+
+                pairs = (AddrPairs*)pos2;
+                I_FREE(pairs);
+            }
+
+            I_FREE(cli);
+        } else if (ENUM_NODE_AGENT_SRV == base->m_node_type) {
+            srv = (AgentSrv*)pos1;
+            
+            list_for_each_safe(pos2, n2, &srv->m_binds) {
+                list_del(pos2, list);
+
+                addr = (Address*)pos2;
+                I_FREE(addr);
+            }
+
+            I_FREE(srv);
+        } else {
+        } 
     }
 }
 
