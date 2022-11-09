@@ -41,5 +41,9 @@ void armSig(int sig, void (*)(int));
 void sleepSec(int sec);
 void getRand(void* buf, int len);
 
+Uint64 getSysTime();
+Uint32 getMonoTime();
+
+
 #endif
 

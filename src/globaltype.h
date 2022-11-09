@@ -7,7 +7,7 @@
 
 
 #define PRINT_LOG(format,args...) do {\
-    fprintf(stdout, "<%s> ", clockMs()); \
+    fprintf(stdout, "<%u-%u-%u> ", now(), tick(), tick_cnt()); \
     fprintf(stdout, format, ##args); \
     fprintf(stdout, "|\n"); \
 } while (0)
@@ -43,7 +43,9 @@
 #endif
 
 extern Void initLib();
-extern const Char* clockMs();
+extern Uint32 tick();
+extern Uint32 tick_cnt();
+extern Uint32 now();
 
 #define ERR_MSG() strerror(errno) 
 

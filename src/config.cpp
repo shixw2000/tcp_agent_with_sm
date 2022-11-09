@@ -7,8 +7,6 @@
 #include"sockutil.h"
 
 
-const Byte* g_test_seid = NULL;
-
 Parser::Parser() {
     memset(&m_config, 0, sizeof(m_config));
 

@@ -218,7 +218,7 @@ struct FdInfo {
 
 enum EnumNodeType {
     ENUM_NODE_OBJ_MIN = 0,
-    ENUM_NODE_SESS_LISTENER = ENUM_NODE_OBJ_MIN,
+    ENUM_NODE_SESS_LISTENER = ENUM_NODE_OBJ_MIN,    // min obj used 
     ENUM_NODE_USR_LISTENER,
 
     ENUM_NODE_SESS_LISTENER_PSEUDO,
@@ -236,7 +236,7 @@ enum EnumNodeType {
     ENUM_NODE_EVENT,
     ENUM_NODE_TIMER, 
 
-    ENUM_NODE_OBJ_MAX,
+    ENUM_NODE_OBJ_MAX,      // max obj 
 
     ENUM_NODE_FACTORY,
     ENUM_NODE_ADDR,

@@ -86,7 +86,7 @@ public:
 private:
     SockMng* m_mng;
     SockCenter* m_center;
-    I_FdObj* m_obj[ENUM_NODE_END];
+    I_FdObj* m_obj[ENUM_NODE_OBJ_MAX];
 };
 
 class SockCenter : public I_TimerDealer {

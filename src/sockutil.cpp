@@ -538,19 +538,4 @@ Int32 connSlow(const TcpParam* param, Int32* pfd) {
     return ret;
 }
 
-const Char* clockMs() {
-    static Char g_time_stamp[32] = {0};
-    struct timespec tp;
-
-    clock_gettime(CLOCK_MONOTONIC_COARSE, &tp);
-
-    snprintf(g_time_stamp, sizeof(g_time_stamp), "%ld.%ld", 
-        tp.tv_sec, tp.tv_nsec/1000000);
-    
-    return g_time_stamp;
-}
-
-Void initLib() {
-    srand(time(NULL));
-}
 

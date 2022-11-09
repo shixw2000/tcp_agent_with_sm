@@ -6,6 +6,8 @@
 #include<sys/types.h>
 #include<sys/stat.h>
 #include<fcntl.h>
+#include<time.h>
+#include<stdlib.h>
 #include"globaltype.h"
 #include"cthread.h"
 
@@ -137,5 +139,35 @@ void getRand(Void* buf, Int32 len) {
     }
     
     return;
+}
+
+Uint64 getSysTime() {
+    Uint64 tm = 0;
+    Int32 ret = 0;
+    struct timespec ts;
+
+    ret = clock_gettime(CLOCK_REALTIME_COARSE, &ts);
+    if (0 == ret) {
+        mulTime(tm, ts.tv_sec, ts.tv_nsec / 1000000);
+    } 
+
+    return tm;
+}
+
+Uint32 getMonoTime() {
+    Uint32 tm = 0;
+    Int32 ret = 0;
+    struct timespec ts;
+
+    ret = clock_gettime(CLOCK_MONOTONIC_COARSE, &ts);
+    if (0 == ret) {
+        tm = (Uint32)ts.tv_sec;
+    }
+
+    return tm;
+}
+
+Void initLib() {
+    srand(time(NULL));
 }
 

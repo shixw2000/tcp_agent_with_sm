@@ -44,6 +44,10 @@ enum BOOL_VAL {
 #define ARR_FREE(x) do { if (NULL != (x)) {delete[] (x); (x)=NULL;} } while (0)
 #define ARR_NEW(type,size, x) ((x) = new type[size])
 
+#define mulTime(tm,sec,msec) ({(tm) = ((sec) << 16) + ((msec)&0XFFFF);})
+#define to_sec(tm) ((tm)>>16)
+#define to_msec(tm) ((tm)&0XFFFF)
+
 
 #endif
 
