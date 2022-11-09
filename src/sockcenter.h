@@ -9,15 +9,87 @@
 
 
 class SockMng;
-class SockUsrListener;
-class SockSessListener;
-class SockUsrConn;
-class SockUsrAccpt;
-class SockSessConn;
-class SockSessAccpt;
-class SockEvent;
+class SockCenter; 
 
-class SockCenter : public I_FdObj, public I_TimerDealer {
+class FdObjFactory : public I_FdObj {
+public:
+    FdObjFactory(SockMng* mng, SockCenter* center)
+        : m_mng(mng), m_center(center) {};
+
+    virtual Int32 getType() const {
+        return ENUM_NODE_OBJ_MAX;
+    }
+
+    Int32 init();
+    Void finish(); 
+
+    template<typename T>
+    T* getObj(Int32 type) {
+        T* obj = NULL;
+
+        if (ENUM_NODE_OBJ_MIN <= type && type < ENUM_NODE_OBJ_MAX
+            && type == m_obj[type]->getType()) {
+            obj = dynamic_cast<T*>(m_obj[type]);
+        } 
+
+        return obj;
+    }
+
+    Int32 addAgentCli(AgentCli* agent, list_head* list);
+    Int32 addAgentSrv(AgentSrv* agent, list_head* list);
+
+    virtual int readFd(struct FdInfo* info);
+    virtual int writeFd(struct FdInfo* info);
+    virtual Int32 procMsg(FdInfo* info, MsgHdr* msg);
+    virtual Void eof(struct FdInfo* info);
+
+public:
+    static Void freeUsrAccptQue(list_head* list);
+    static Void freeUsrConnQue(list_head* list);
+    static Void freeSessAccptQue(order_list_head* list);
+    static Void freeSessConnQue(order_list_head* list);
+
+    static Void freeMsgQue(list_head* list);
+    static Void freeFd(FdInfo* info);
+
+    static Void closeSock(SockBase* sock);
+    static Void resetSock(SockBase* sock); 
+    static Void resetNode(NodeBase* base);
+
+    static EvpBase* creatEvp();
+    static Void freeEvp(EvpBase* evp);
+
+    static EventData* newEventData();
+    static Void freeEventData(EventData* ev);
+    
+    static TimerData* newTimerData();
+    static Void freeTimerData(TimerData* timer);
+
+    static ListenerTcp* newListenerTcp();
+    static Void freeListenerTcp(ListenerTcp* listener);
+
+    static ListenerDirty* newListenerDirty();
+    static Void freeListenerDirty(ListenerDirty* listener);
+  
+    static SessionAccpt* newSessAccpt();
+    static Void freeSessAccpt(SessionAccpt* sess);
+
+    static SessionConn* newSessConn();
+    static Void freeSessConn(SessionConn* sess);
+
+    static UserAccpt* newUsrAccpt();
+    static Void freeUsrAccpt(UserAccpt* usr);
+
+    static UserConn* newUsrConn();
+    static Void freeUsrConn(UserConn* usr);
+
+private:
+    SockMng* m_mng;
+    SockCenter* m_center;
+    I_FdObj* m_obj[ENUM_NODE_END];
+};
+
+class SockCenter : public I_TimerDealer {
 public:
     SockCenter();
 
@@ -32,13 +104,6 @@ public:
     Void stopServer();
     Void wait();
 
-    virtual int readFd(struct FdInfo* info);
-    virtual int writeFd(struct FdInfo* info);
-    virtual Int32 procMsg(FdInfo* info, MsgHdr* msg);
-    virtual Void eof(struct FdInfo* info);
-
-    Int32 creatTimerData();
-
     Int32 chkConn(FdInfo* info);
 
     struct SysBase* getBase() {
@@ -47,46 +112,7 @@ public:
 
     Int32 addAgentCli(AgentCli* agent, list_head* list);
     Int32 addAgentSrv(AgentSrv* agent, list_head* list);
-    
-    Void freeUsrAccptQue(list_head* list);
-    Void freeUsrConnQue(list_head* list);
-    Void freeSessAccptQue(order_list_head* list);
-    Void freeSessConnQue(order_list_head* list);
-
-    Void freeMsgQue(list_head* list);
-    Void freeFd(FdInfo* info);
-
-    Void closeSock(SockBase* sock);
-    Void resetSock(SockBase* sock); 
-    Void resetNode(NodeBase* base);
-
-    EvpBase* creatEvp();
-    Void freeEvp(EvpBase* evp);
-
-    EventData* newEventData();
-    Void freeEventData(EventData* ev);
-    
-    TimerData* newTimerData();
-    Void freeTimerData(TimerData* timer);
-
-    ListenerTcp* newListenerTcp();
-    Void freeListenerTcp(ListenerTcp* listener);
-
-    ListenerDirty* newListenerDirty();
-    Void freeListenerDirty(ListenerDirty* listener);
   
-    SessionAccpt* newSessAccpt();
-    Void freeSessAccpt(SessionAccpt* sess);
-
-    SessionConn* newSessConn();
-    Void freeSessConn(SessionConn* sess);
-
-    UserAccpt* newUsrAccpt();
-    Void freeUsrAccpt(UserAccpt* usr);
-
-    UserConn* newUsrConn();
-    Void freeUsrConn(UserConn* usr);
-
     MsgHdr* decCipherText(EvpBase* evp, MsgHdr* input);
     MsgHdr* encPlainText(EvpBase* evp, MsgHdr* input);
 
@@ -126,19 +152,12 @@ private:
     list_head m_list_service;
     Uint32 m_last_session_id;
     Uint32 m_last_user_id;
-    SockMng* m_mng;
     const Char* m_path;
+    SockMng* m_mng; 
     Parser* m_parser;
-    
-    SockEvent* m_event;
-    SockUsrListener* m_usr_listener;
-    SockSessListener* m_sess_listener;
-    SockUsrConn* m_usr_conn;
-    SockUsrAccpt* m_usr_accpt;
-    SockSessConn* m_sess_conn;
-    SockSessAccpt* m_sess_accpt;
-
-    I_FdObj* m_obj[ENUM_NODE_END];
+    FdObjFactory* m_fctry;
+    EventData* m_event_data;
+    TimerData* m_timer_data;
     
     struct SysBase m_base;
 };

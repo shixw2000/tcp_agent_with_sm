@@ -16,6 +16,10 @@ public:
     SockUsrListener(SockMng* mng, SockCenter* center,
         SockUsrAccpt* accpt)
         : m_mng(mng), m_center(center), m_accpt(accpt) {}
+
+    virtual Int32 getType() const {
+        return ENUM_NODE_USR_LISTENER;
+    }
     
     virtual int readFd(struct FdInfo* info);
     virtual int writeFd(struct FdInfo* info);
@@ -41,6 +45,10 @@ class SockUsrAccpt : public I_FdObj {
 public:
     SockUsrAccpt(SockMng* mng, SockCenter* center, SockSessConn* conn)
         : m_mng(mng), m_center(center), m_conn(conn) {}
+
+    virtual Int32 getType() const {
+        return ENUM_NODE_USR_ACCPT;
+    }
     
     virtual int readFd(struct FdInfo* info);
     virtual int writeFd(struct FdInfo* info);
@@ -77,6 +85,10 @@ class SockUsrConn : public I_FdObj {
 public:
     SockUsrConn(SockMng* mng, SockCenter* center)
         : m_mng(mng), m_center(center) {}
+
+    virtual Int32 getType() const {
+        return ENUM_NODE_USR_CONN;
+    }
     
     virtual int readFd(struct FdInfo* info);
     virtual int writeFd(struct FdInfo* info);
@@ -107,6 +119,28 @@ private:
 private:
     SockMng* m_mng;
     SockCenter* m_center;
+};
+
+class SockUsrAccptPseudo : public SockUsrAccpt {
+public:
+    SockUsrAccptPseudo(SockMng* mng, SockCenter* center, 
+        SockSessConn* conn)
+        : SockUsrAccpt(mng, center, conn) {}
+
+    virtual Int32 getType() const {
+        return ENUM_NODE_USR_ACCPT_PSEUDO;
+    }
+};
+
+class SockUsrListenerPseudo : public SockUsrListener {
+public:
+    SockUsrListenerPseudo(SockMng* mng, SockCenter* center,
+        SockUsrAccptPseudo* accpt)
+        : SockUsrListener(mng, center, accpt) {}
+
+    virtual Int32 getType() const {
+        return ENUM_NODE_USR_LISTENER_PSEUDO;
+    }
 };
 
 #endif

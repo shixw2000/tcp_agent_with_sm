@@ -17,6 +17,10 @@ public:
     virtual int init();
     virtual void finish();
 
+    void set(int fd) {
+        m_event_fd = fd;
+    }
+
     FdInfo* creatFd(Int32 fd, Bool testRd, Bool testWr);
     
     virtual void procTaskEnd(struct Task* task);

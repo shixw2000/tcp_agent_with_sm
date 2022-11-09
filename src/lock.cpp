@@ -44,7 +44,8 @@ bool SpinLock::lock(int n) {
     if (0 == ret) {
         return true;
     } else {
-        LOG_ERROR("spin_lock| ret=%d| error=%s|", ret, ERR_MSG());
+        LOG_ERROR("spin_lock| ret=%d| n=%d| error=%s|",
+            ret, n, ERR_MSG());
         return false;
     }
 }
@@ -56,7 +57,8 @@ bool SpinLock::unlock(int n) {
     if (0 == ret) {
         return true;
     } else {
-        LOG_ERROR("spin_unlock| ret=%d| error=%s|", ret, ERR_MSG());
+        LOG_ERROR("spin_unlock| ret=%d| n=%d| error=%s|", 
+            ret, n, ERR_MSG());
         return false;
     }
 }
@@ -177,19 +179,21 @@ bool MutexLock::lock(int n) {
     if (0 == ret) {
         return true;
     } else {
-        LOG_ERROR("mutex_lock| ret=%d| error=%s|", ret, ERR_MSG());
+        LOG_ERROR("mutex_lock| ret=%d| n=%d| error=%s|", 
+            ret, n, ERR_MSG());
         return false;
     }
 }
 
-bool MutexLock::unlock(int) {
+bool MutexLock::unlock(int n) {
     int ret = 0;
 
     ret = pthread_mutex_unlock(m_mutex);
     if (0 == ret) {
         return true;
     } else {
-        LOG_ERROR("mutex_unlock| ret=%d| error=%s|", ret, ERR_MSG());
+        LOG_ERROR("mutex_unlock| ret=%d| n=%d| error=%s|",
+            ret, n,ERR_MSG());
         return false;
     }
 }

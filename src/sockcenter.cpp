@@ -42,99 +42,139 @@ static Int32 cmpSessConnID(list_node* n1, list_node* n2) {
     }
 }
 
-SockCenter::SockCenter() {
-    INIT_LIST_HEAD(&m_list_service);
-    
-    m_last_session_id = 0;
-    m_last_user_id = 0;
 
-    m_parser = NULL;
-    m_mng = NULL;
-    m_event = NULL;
-    m_sess_conn = NULL;
-    m_sess_conn = NULL;
-    m_sess_listener = NULL;
-    m_usr_conn = NULL;
-    m_usr_accpt = NULL;
-    m_usr_listener = NULL;
-}
-
-Int32 SockCenter::init() {
+Int32 FdObjFactory::init() {
     Int32 ret = 0;
+    EventHandler* event = NULL;
+    TimerHandler* timer = NULL;
+    SockUsrListener* usr_listener = NULL;
+    SockSessListener* sess_listener = NULL;
+    SockUsrConn* usr_conn = NULL;
+    SockUsrAccpt* usr_accpt = NULL;
+    SockSessConn* sess_conn = NULL;
+    SockSessAccpt* sess_accpt = NULL;
+    SockSessConnPseudo* sess_conn_pseudo = NULL;
+    SockSessAccptPseudo* sess_accpt_pseudo = NULL;
+    SockUsrListenerPseudo* usr_listener_pseudo = NULL;
+    SockSessListenerPseudo* sess_listener_pseudo = NULL;
+    SockUsrAccptPseudo* usr_accpt_pseudo = NULL;
+    
+    memset(m_obj, 0, sizeof(m_obj));
 
-    do {
-        memset(m_obj, 0, sizeof(*m_obj));
-        
-        I_NEW(Parser, m_parser);
-        ret = m_parser->init(m_path);
-        if (0 != ret) {
-            break;
-        } 
+    I_NEW_2(EventHandler, event, m_mng, m_center);
+    m_obj[ENUM_NODE_EVENT] = event;
 
-        getRand(m_base.m_seid, DEF_SEID_SIZE);
-        getRand(m_base.m_rand, DEF_RAND_CODE_SIZE);
-        
-        I_NEW_1(SockMng, m_mng, DEF_FD_MAX_CAPACITY);
+    I_NEW_2(TimerHandler, timer, m_mng, m_center);
+    m_obj[ENUM_NODE_TIMER] = timer;
+    
+    I_NEW_2(SockSessConn, sess_conn, m_mng, m_center);
+    m_obj[ENUM_NODE_SESS_CONN] = sess_conn;
 
-        m_mng->set(this);
-        ret = m_mng->init();
-        if (0 != ret) {
-            break;
-        }
+    I_NEW_2(SockSessConnPseudo, sess_conn_pseudo, m_mng, m_center);
+    m_obj[ENUM_NODE_SESS_CONN_PSEUDO] = sess_conn_pseudo;
+    
+    I_NEW_2(SockSessAccpt, sess_accpt, m_mng, m_center);
+    m_obj[ENUM_NODE_SESS_ACCPT] = sess_accpt;
+    
+    I_NEW_2(SockSessAccptPseudo, sess_accpt_pseudo, m_mng, m_center);
+    m_obj[ENUM_NODE_SESS_ACCPT_PSEUDO] = sess_accpt_pseudo;
+    
+    I_NEW_3(SockSessListener, sess_listener, m_mng, m_center, sess_accpt);
+    m_obj[ENUM_NODE_SESS_LISTENER] = sess_listener;
 
-        I_NEW_2(SockEvent, m_event, m_mng, this);
-        m_obj[ENUM_NODE_EVENT] = m_event;
-        
-        I_NEW_2(SockSessConn, m_sess_conn, m_mng, this);
-        m_obj[ENUM_NODE_SESS_CONN] = m_sess_conn;
-        
-        I_NEW_2(SockSessAccpt, m_sess_accpt, m_mng, this);
-        m_obj[ENUM_NODE_SESS_ACCPT] = m_sess_accpt;
-        
-        I_NEW_3(SockSessListener, m_sess_listener, m_mng, this, m_sess_accpt);
-        m_obj[ENUM_NODE_SESS_LISTENER] = m_sess_listener;
+    I_NEW_3(SockSessListenerPseudo, sess_listener_pseudo, 
+        m_mng, m_center, sess_accpt_pseudo);
+    m_obj[ENUM_NODE_SESS_LISTENER_PSEUDO] = sess_listener_pseudo;
 
-        I_NEW_2(SockUsrConn, m_usr_conn, m_mng, this);
-        m_obj[ENUM_NODE_USR_CONN] = m_usr_conn;
-        
-        I_NEW_3(SockUsrAccpt, m_usr_accpt, m_mng, this, m_sess_conn);
-        m_obj[ENUM_NODE_USR_ACCPT] = m_usr_accpt;
-        
-        I_NEW_3(SockUsrListener, m_usr_listener, m_mng, this, m_usr_accpt);
-        m_obj[ENUM_NODE_USR_LISTENER] = m_usr_listener; 
-    } while (0);
+    I_NEW_2(SockUsrConn, usr_conn, m_mng, m_center);
+    m_obj[ENUM_NODE_USR_CONN] = usr_conn;
+    
+    I_NEW_3(SockUsrAccpt, usr_accpt, m_mng, m_center, sess_conn);
+    m_obj[ENUM_NODE_USR_ACCPT] = usr_accpt;
+
+    I_NEW_3(SockUsrAccptPseudo, usr_accpt_pseudo, m_mng,
+        m_center, sess_conn_pseudo);
+    m_obj[ENUM_NODE_USR_ACCPT_PSEUDO] = usr_accpt_pseudo;
+    
+    I_NEW_3(SockUsrListener, usr_listener, m_mng, m_center, usr_accpt);
+    m_obj[ENUM_NODE_USR_LISTENER] = usr_listener; 
+
+    I_NEW_3(SockUsrListenerPseudo, usr_listener_pseudo, 
+        m_mng, m_center, usr_accpt_pseudo);
+    m_obj[ENUM_NODE_USR_LISTENER_PSEUDO] = usr_listener_pseudo;
 
     return ret;
 }
 
-Void SockCenter::finish() {
-    if (NULL != m_mng) {
-        m_mng->finish();
-        I_FREE(m_mng);
+Void FdObjFactory::finish() {
+    for (int i=0; i<ENUM_NODE_OBJ_MAX; ++i) {
+        I_FREE(m_obj[i]);
     }
-
-    if (NULL != m_parser) {
-        m_parser->finish();
-        I_FREE(m_parser);
-    }
-
-    I_FREE(m_event);
-    
-    I_FREE(m_sess_conn);
-    I_FREE(m_sess_accpt);
-    I_FREE(m_sess_listener);
-
-    I_FREE(m_usr_conn);
-    I_FREE(m_usr_accpt);
-    I_FREE(m_usr_listener);
 }
 
-int SockCenter::readFd(struct FdInfo* info) {
+Int32 FdObjFactory::addAgentSrv(AgentSrv* agent, list_head* list) {
+    Int32 ret = 0; 
+    list_node* pos = NULL;
+    Address* addr = NULL;
+    SockUsrListener* sockListener = NULL;
+    ListenerDirty* listener = NULL;
+
+    sockListener = getObj<SockUsrListener>(agent->m_base.m_node_type);
+    
+    list_for_each(pos, &agent->m_binds) {
+        addr = (Address*)pos;
+
+        listener = sockListener->setup(&addr->m_param);
+        if (NULL != listener) {
+            list_add_back(&listener->m_base.m_node, list);
+        } else {
+            ret = -1;
+            break;
+        }
+    } 
+    
+    return ret;
+} 
+
+Int32 FdObjFactory::addAgentCli(AgentCli* agent, list_head* list) {
+    Int32 ret = 0; 
+    list_node* pos = NULL;
+    AddrPairs* pairs = NULL;
+    SockUsrConn* sockUsr = NULL;
+    SockSessListener* sockListener = NULL;
+    ListenerTcp* listener = NULL;
+    UserConn* usr = NULL;
+
+    sockListener = getObj<SockSessListener>(agent->m_base.m_node_type);
+    sockUsr = getObj<SockUsrConn>(ENUM_NODE_USR_CONN);
+    
+    usr = sockUsr->setup(&agent->m_origin);
+    if (NULL != usr) {
+        list_add_back(&usr->m_base.m_node, list);
+        
+        list_for_each(pos, &agent->m_pairs) {
+            pairs = (AddrPairs*)pos;
+
+            listener = sockListener->setup(usr, &pairs->m_pairs);
+            if (NULL != listener) {
+                list_add_back(&listener->m_base.m_node, &usr->m_listener_que);
+            } else {
+                ret = -1;
+                break;
+            }
+        }
+    }
+    
+    return ret;
+}
+
+int FdObjFactory::readFd(struct FdInfo* info) {
     Int32 ret = 0;
 
-    if (0 <= info->m_fd_type && ENUM_NODE_END > info->m_fd_type) {
+    if (0 <= info->m_fd_type && ENUM_NODE_OBJ_MAX > info->m_fd_type) {
         if (NULL != m_obj[info->m_fd_type]) {
             ret = m_obj[info->m_fd_type]->readFd(info);
+            
             LOG_DEBUG("read_fd| ret=%d| fd=%d| type=%d| data=%p|",
                 ret, info->m_fd, info->m_fd_type, info->m_data);
         } else {
@@ -151,10 +191,10 @@ int SockCenter::readFd(struct FdInfo* info) {
     return ret;
 }
 
-int SockCenter::writeFd(struct FdInfo* info) {
+int FdObjFactory::writeFd(struct FdInfo* info) {
     Int32 ret = 0;
 
-    if (0 <= info->m_fd_type && ENUM_NODE_END > info->m_fd_type) {
+    if (0 <= info->m_fd_type && ENUM_NODE_OBJ_MAX > info->m_fd_type) {
         if (NULL != m_obj[info->m_fd_type]) {
             ret = m_obj[info->m_fd_type]->writeFd(info);
             
@@ -174,12 +214,13 @@ int SockCenter::writeFd(struct FdInfo* info) {
     return ret;
 }
 
-Int32 SockCenter::procMsg(FdInfo* info, MsgHdr* msg) {
+Int32 FdObjFactory::procMsg(FdInfo* info, MsgHdr* msg) {
     Int32 ret = 0;
 
-    if (0 <= info->m_fd_type && ENUM_NODE_END > info->m_fd_type) {
+    if (0 <= info->m_fd_type && ENUM_NODE_OBJ_MAX > info->m_fd_type) {
         if (NULL != m_obj[info->m_fd_type]) {
             ret = m_obj[info->m_fd_type]->procMsg(info, msg);
+            
             LOG_DEBUG("proc_msg| ret=%d| fd=%d| type=%d| data=%p|",
                 ret, info->m_fd, info->m_fd_type, info->m_data);
         } else {
@@ -196,8 +237,8 @@ Int32 SockCenter::procMsg(FdInfo* info, MsgHdr* msg) {
     return ret;
 }
 
-void SockCenter::eof(struct FdInfo* info) {
-    if (0 <= info->m_fd_type && ENUM_NODE_END > info->m_fd_type) {
+void FdObjFactory::eof(struct FdInfo* info) {
+    if (0 <= info->m_fd_type && ENUM_NODE_OBJ_MAX > info->m_fd_type) {
         if (NULL != m_obj[info->m_fd_type]) {
             m_obj[info->m_fd_type]->eof(info);
             
@@ -215,7 +256,7 @@ void SockCenter::eof(struct FdInfo* info) {
     return;
 }
 
-Void SockCenter::freeUsrAccptQue(list_head* list) {
+Void FdObjFactory::freeUsrAccptQue(list_head* list) {
     list_node* pos = NULL;
     list_node* n = NULL;
     UserAccpt* usr = NULL;
@@ -230,7 +271,7 @@ Void SockCenter::freeUsrAccptQue(list_head* list) {
     }
 }
 
-Void SockCenter::freeUsrConnQue(list_head* list) {
+Void FdObjFactory::freeUsrConnQue(list_head* list) {
     list_node* pos = NULL;
     list_node* n = NULL;
     UserConn* usr = NULL;
@@ -246,7 +287,7 @@ Void SockCenter::freeUsrConnQue(list_head* list) {
     }
 }
 
-Void SockCenter::freeSessAccptQue(order_list_head* list) {
+Void FdObjFactory::freeSessAccptQue(order_list_head* list) {
     list_node* pos = NULL;
     list_node* n = NULL;
     SessionAccpt* sess = NULL;
@@ -262,7 +303,7 @@ Void SockCenter::freeSessAccptQue(order_list_head* list) {
     }
 }
 
-Void SockCenter::freeSessConnQue(order_list_head* list) {
+Void FdObjFactory::freeSessConnQue(order_list_head* list) {
     list_node* pos = NULL;
     list_node* n = NULL;
     SessionConn* sess = NULL;
@@ -277,7 +318,7 @@ Void SockCenter::freeSessConnQue(order_list_head* list) {
     }
 }
 
-Void SockCenter::freeMsgQue(list_head* list) {
+Void FdObjFactory::freeMsgQue(list_head* list) {
     list_node* pos = NULL;
     list_node* n = NULL;
     MsgHdr* msg = NULL;
@@ -292,7 +333,7 @@ Void SockCenter::freeMsgQue(list_head* list) {
     }
 }
 
-Void SockCenter::freeFd(FdInfo* info) {
+Void FdObjFactory::freeFd(FdInfo* info) {
     Int32 fd = info->m_fd;
 
     if (0 <= fd) {
@@ -309,7 +350,7 @@ Void SockCenter::freeFd(FdInfo* info) {
     }
 } 
 
-Void SockCenter::closeSock(SockBase* sock) { 
+Void FdObjFactory::closeSock(SockBase* sock) { 
     if (NULL != sock->m_curr_snd) {
         MsgCenter::free(sock->m_curr_snd);
 
@@ -323,16 +364,16 @@ Void SockCenter::closeSock(SockBase* sock) {
     }
 }
 
-Void SockCenter::resetSock(SockBase* sock) {
+Void FdObjFactory::resetSock(SockBase* sock) {
     memset(sock, 0, sizeof(SockBase));
 }
 
-Void SockCenter::resetNode(NodeBase* base) {
+Void FdObjFactory::resetNode(NodeBase* base) {
     memset(base, 0, sizeof(NodeBase));
     INIT_LIST_NODE(&base->m_node);
 }
 
-EvpBase* SockCenter::creatEvp() {
+EvpBase* FdObjFactory::creatEvp() {
     EvpBase* evp = NULL;
     
     I_NEW(EvpBase, evp);
@@ -344,29 +385,28 @@ EvpBase* SockCenter::creatEvp() {
     return evp;
 }
 
-Void SockCenter::freeEvp(EvpBase* evp) {
+Void FdObjFactory::freeEvp(EvpBase* evp) {
     I_FREE(evp);
 }
 
-EventData* SockCenter::newEventData() {
+EventData* FdObjFactory::newEventData() {
     EventData* ev = NULL;
 
     I_NEW(EventData, ev);
     memset(ev, 0, sizeof(EventData));
     
     resetNode(&ev->m_base);
-    ev->m_base.m_node_type = ENUM_NODE_EVENT;
 
     return ev;
 }
 
-Void SockCenter::freeEventData(EventData* ev) {
+Void FdObjFactory::freeEventData(EventData* ev) {
     if (NULL != ev) {  
         I_FREE(ev);
     }
 }
 
-TimerData* SockCenter::newTimerData() {
+TimerData* FdObjFactory::newTimerData() {
     TimerData* timer = NULL;
 
     I_NEW(TimerData, timer);
@@ -375,12 +415,11 @@ TimerData* SockCenter::newTimerData() {
     I_NEW(TickTimer, timer->m_timer);
     
     resetNode(&timer->m_base);
-    timer->m_base.m_node_type = ENUM_NODE_TIMER;
 
     return timer;
 }
 
-Void SockCenter::freeTimerData(TimerData* timer) {
+Void FdObjFactory::freeTimerData(TimerData* timer) {
     if (NULL != timer) {  
         if (NULL != timer->m_timer) {
             timer->m_timer->stop();
@@ -392,37 +431,35 @@ Void SockCenter::freeTimerData(TimerData* timer) {
     }
 }
 
-ListenerTcp* SockCenter::newListenerTcp() {
+ListenerTcp* FdObjFactory::newListenerTcp() {
     ListenerTcp* listener = NULL; 
     
     I_NEW(ListenerTcp, listener);
     memset(listener, 0, sizeof(ListenerTcp));
 
     resetNode(&listener->m_base);
-    listener->m_base.m_node_type = ENUM_NODE_SESS_LISTENER;
 
     return listener;
 }
 
-Void SockCenter::freeListenerTcp(ListenerTcp* listener) {
+Void FdObjFactory::freeListenerTcp(ListenerTcp* listener) {
     I_FREE(listener);
 }
 
-ListenerDirty* SockCenter::newListenerDirty() {
+ListenerDirty* FdObjFactory::newListenerDirty() {
     ListenerDirty* listener = NULL;
 
     I_NEW(ListenerDirty, listener);
     memset(listener, 0, sizeof(ListenerDirty));
 
     resetNode(&listener->m_base);
-    listener->m_base.m_node_type = ENUM_NODE_USR_LISTENER;
 
     INIT_LIST_HEAD(&listener->m_usr_que);
 
     return listener;
 }
 
-Void SockCenter::freeListenerDirty(ListenerDirty* listener) {
+Void FdObjFactory::freeListenerDirty(ListenerDirty* listener) {
     if (NULL != listener) {
         freeUsrAccptQue(&listener->m_usr_que);
         
@@ -430,21 +467,20 @@ Void SockCenter::freeListenerDirty(ListenerDirty* listener) {
     }
 }
 
-SessionAccpt* SockCenter::newSessAccpt() {
+SessionAccpt* FdObjFactory::newSessAccpt() {
     SessionAccpt* sess = NULL;
 
     I_NEW(SessionAccpt, sess);
     memset(sess, 0, sizeof(SessionAccpt));
 
     resetNode(&sess->m_base);
-    sess->m_base.m_node_type = ENUM_NODE_SESS_ACCPT;
     
     resetSock(&sess->m_sock);
 
     return sess;
 }
 
-Void SockCenter::freeSessAccpt(SessionAccpt* sess) {
+Void FdObjFactory::freeSessAccpt(SessionAccpt* sess) {
     closeSock(&sess->m_sock);
 
     if (NULL != sess->m_fdinfo) {
@@ -456,20 +492,19 @@ Void SockCenter::freeSessAccpt(SessionAccpt* sess) {
     I_FREE(sess);
 }
 
-SessionConn* SockCenter::newSessConn() {
+SessionConn* FdObjFactory::newSessConn() {
     SessionConn* sess = NULL;
 
     I_NEW(SessionConn, sess);
     memset(sess, 0, sizeof(SessionConn));
 
     resetNode(&sess->m_base);
-    sess->m_base.m_node_type = ENUM_NODE_SESS_CONN;
     resetSock(&sess->m_sock);
 
     return sess;
 }
 
-Void SockCenter::freeSessConn(SessionConn* sess) {
+Void FdObjFactory::freeSessConn(SessionConn* sess) {
     closeSock(&sess->m_sock);
 
     if (NULL != sess->m_fdinfo) {
@@ -481,14 +516,13 @@ Void SockCenter::freeSessConn(SessionConn* sess) {
     I_FREE(sess);
 }
 
-UserAccpt* SockCenter::newUsrAccpt() {
+UserAccpt* FdObjFactory::newUsrAccpt() {
     UserAccpt* user = NULL;
 
     I_NEW(UserAccpt, user);
     memset(user, 0, sizeof(UserAccpt));
 
     resetNode(&user->m_base);
-    user->m_base.m_node_type = ENUM_NODE_USR_ACCPT;
     resetSock(&user->m_sock);
 
     INIT_ORDER_LIST_HEAD(&user->m_session_que, &cmpSessConnID);
@@ -501,7 +535,7 @@ UserAccpt* SockCenter::newUsrAccpt() {
     return user;
 }
 
-Void SockCenter::freeUsrAccpt(UserAccpt* usr) {
+Void FdObjFactory::freeUsrAccpt(UserAccpt* usr) {
     closeSock(&usr->m_sock);
     
     if (NULL != usr->m_evp_rcv) {
@@ -527,14 +561,13 @@ Void SockCenter::freeUsrAccpt(UserAccpt* usr) {
     I_FREE(usr);
 }
 
-UserConn* SockCenter::newUsrConn() {
+UserConn* FdObjFactory::newUsrConn() {
     UserConn* user = NULL;
 
     I_NEW(UserConn, user);
     memset(user, 0, sizeof(UserConn));
 
     resetNode(&user->m_base);
-    user->m_base.m_node_type = ENUM_NODE_USR_CONN;
     resetSock(&user->m_sock);
     
     INIT_LIST_HEAD(&user->m_listener_que);
@@ -548,7 +581,7 @@ UserConn* SockCenter::newUsrConn() {
     return user;
 }
 
-Void SockCenter::freeUsrConn(UserConn* usr) {    
+Void FdObjFactory::freeUsrConn(UserConn* usr) {    
     closeSock(&usr->m_sock);
 
     if (NULL != usr->m_evp_rcv) {
@@ -572,6 +605,76 @@ Void SockCenter::freeUsrConn(UserConn* usr) {
     }
     
     I_FREE(usr);
+}
+
+
+SockCenter::SockCenter() {
+    INIT_LIST_HEAD(&m_list_service);
+    
+    m_last_session_id = 0;
+    m_last_user_id = 0;
+
+    m_parser = NULL;
+    m_mng = NULL;
+    m_fctry = NULL;
+    m_event_data = NULL;
+    m_timer_data = NULL;
+}
+
+Int32 SockCenter::init() {
+    Int32 ret = 0;
+    EventHandler* event = NULL;
+    TimerHandler* timer = NULL;
+
+    do {        
+        I_NEW(Parser, m_parser);
+        ret = m_parser->init(m_path);
+        if (0 != ret) {
+            break;
+        } 
+
+        getRand(m_base.m_seid, DEF_SEID_SIZE);
+        getRand(m_base.m_rand, DEF_RAND_CODE_SIZE);
+        
+        I_NEW_1(SockMng, m_mng, DEF_FD_MAX_CAPACITY);
+        ret = m_mng->init();
+        if (0 != ret) {
+            break;
+        }
+        
+        I_NEW_2(FdObjFactory, m_fctry, m_mng, this); 
+        ret = m_fctry->init();
+        if (0 != ret) {
+            break;
+        }
+
+        event = m_fctry->getObj<EventHandler>(ENUM_NODE_EVENT);
+        m_event_data = event->setup();
+
+        timer = m_fctry->getObj<TimerHandler>(ENUM_NODE_TIMER);
+        m_timer_data = timer->setup();
+
+        m_mng->set(m_event_data->m_fdinfo->m_fd, m_fctry);
+    } while (0);
+
+    return ret;
+}
+
+Void SockCenter::finish() {
+    if (NULL != m_mng) {
+        m_mng->finish();
+        I_FREE(m_mng);
+    }
+
+    if (NULL != m_parser) {
+        m_parser->finish();
+        I_FREE(m_parser);
+    }
+
+    if (NULL != m_fctry) {
+        m_fctry->finish();
+        I_FREE(m_fctry);
+    }
 }
 
 Int32 SockCenter::notifySessEvent(FdInfo* info, Uint16 cmd,
@@ -826,26 +929,6 @@ Int32 SockCenter::digest(EvpBase* evp, const Void* data,
 Void SockCenter::doTimeout(struct TimerEle* ele) {
 }
 
-Int32 SockCenter::creatTimerData() {
-    Int32 fd = -1;
-    FdInfo* info = NULL;
-    TimerData* data = NULL;
-    
-    /* alarm every 1 sec */
-    fd = creatTimerFd(1000); 
-    if (0 > fd) { 
-        return -1;
-    }
-
-    info = m_mng->creatBase(fd, TRUE, FALSE);
-    data = newTimerData();
-    data->m_timer->setDealer(this); 
-    data->m_fdinfo = info; 
-    
-    m_mng->addEvent(info, &data->m_base); 
-    return 0;
-}
-
 Int32 SockCenter::chkConn(FdInfo* info) {
     Int32 ret = 0;
 
@@ -863,51 +946,19 @@ Int32 SockCenter::chkConn(FdInfo* info) {
 
 Int32 SockCenter::addAgentSrv(AgentSrv* agent, list_head* list) {
     Int32 ret = 0; 
-    list_node* pos = NULL;
-    Address* addr = NULL;
-    ListenerDirty* listener = NULL;
 
-    list_for_each(pos, &agent->m_binds) {
-        addr = (Address*)pos;
-
-        listener = m_usr_listener->setup(&addr->m_param);
-        if (NULL != listener) {
-            list_add_back(&listener->m_base.m_node, list);
-        } else {
-            ret = -1;
-            break;
-        }
-    } 
+    ret = m_fctry->addAgentSrv(agent, list);
     
     return ret;
 } 
 
-Int32 SockCenter::addAgentCli(AgentCli* agent, list_head* list) {
+Int32 SockCenter::addAgentCli(AgentCli* agent, list_head* list) { 
     Int32 ret = 0; 
-    list_node* pos = NULL;
-    AddrPairs* pairs = NULL;
-    ListenerTcp* listener = NULL;
-    UserConn* usr = NULL;
 
-    usr = m_usr_conn->setup(&agent->m_origin);
-    if (NULL != usr) {
-        list_add_back(&usr->m_base.m_node, list);
-        
-        list_for_each(pos, &agent->m_pairs) {
-            pairs = (AddrPairs*)pos;
-
-            listener = m_sess_listener->setup(usr, &pairs->m_pairs);
-            if (NULL != listener) {
-                list_add_back(&listener->m_base.m_node, &usr->m_listener_que);
-            } else {
-                ret = -1;
-                break;
-            }
-        }
-    }
+    ret = m_fctry->addAgentCli(agent, list);
     
     return ret;
-} 
+}
 
 Int32 SockCenter::startServer() {
     Int32 ret = 0;
@@ -924,11 +975,13 @@ Int32 SockCenter::startServer() {
     list_for_each(pos, &config->m_agent_list) {
         base = (NodeBase*)pos;
 
-        if (ENUM_NODE_AGENT_CLI == base->m_node_type) {
+        if (ENUM_NODE_SESS_LISTENER == base->m_node_type
+            || ENUM_NODE_SESS_LISTENER_PSEUDO == base->m_node_type) {
             cli = (AgentCli*)base;
             
             ret = addAgentCli(cli, &m_list_service);
-        } else if (ENUM_NODE_AGENT_SRV == base->m_node_type) {
+        } else if (ENUM_NODE_USR_LISTENER == base->m_node_type
+            || ENUM_NODE_USR_LISTENER_PSEUDO == base->m_node_type) {
             srv = (AgentSrv*)base;
             
             ret = addAgentSrv(srv, &m_list_service);

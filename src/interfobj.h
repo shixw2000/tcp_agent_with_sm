@@ -45,6 +45,8 @@ struct FdInfo;
 class I_FdObj {
 public:
     virtual ~I_FdObj() {}
+
+    virtual Int32 getType() const = 0;
     
     /* return: 0-ok, other: error */
     virtual int readFd(struct FdInfo* info) = 0;

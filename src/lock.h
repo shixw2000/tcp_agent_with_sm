@@ -16,8 +16,8 @@ public:
 
 class EmptyLock : public Lock {
 public:
-    virtual bool lock(int n) { return true; }
-    virtual bool unlock(int n) { return true; }
+    virtual bool lock(int) { return true; }
+    virtual bool unlock(int) { return true; }
 };
 
 class SpinLock : public Lock {

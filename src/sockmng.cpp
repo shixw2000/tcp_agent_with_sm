@@ -12,7 +12,7 @@
 
 
 SockMng::SockMng(int capacity) : m_capacity(capacity) {
-    m_center = NULL;
+    m_obj = NULL;
     
     m_lock = NULL;
     m_poll = NULL;
@@ -68,6 +68,11 @@ Void SockMng::finish() {
     }
 
     TaskPool::finish();
+}
+
+Void SockMng::set(int fd, I_FdObj* obj) {
+    m_poll->set(fd);
+    m_obj = obj;
 }
 
 int SockMng::start(const char* name) {
@@ -188,14 +193,14 @@ Int32 SockMng::writeMsg(FdInfo* info) {
         unlock(info);
     }
 
-    ret = m_center->writeFd(info); 
+    ret = m_obj->writeFd(info); 
     return ret;
 }
 
 Int32 SockMng::readMsg(FdInfo* info) {
     Int32 ret = 0;
     
-    ret = m_center->readFd(info);
+    ret = m_obj->readFd(info);
     return ret;
 }
 
@@ -275,19 +280,22 @@ Void SockMng::dealMsg(FdInfo* info) {
 Int32 SockMng::procMsg(FdInfo* info, MsgHdr* msg) {
     Int32 ret = 0;
     
-    ret = m_center->procMsg(info, msg);
+    ret = m_obj->procMsg(info, msg);
     return ret;
 }
 
 Void SockMng::endFd(FdInfo* info) {
-    m_center->eof(info);
+    m_obj->eof(info);
 }
 
-Int32 SockMng::notify(FdInfo* info, Uint16 cmd) {
+Int32 SockMng::notify(FdInfo* info, Uint16 cmd, Uint64 data) {
     Int32 ret = 0;
     MsgHdr* hdr = NULL;
+    MsgNotify* msg = NULL;
 
     hdr = MsgCenter::creat<MsgNotify>(cmd);
+    msg = MsgCenter::cast<MsgNotify>(hdr);
+    msg->m_data = data;
 
     MsgCenter::addCrc(hdr);
 

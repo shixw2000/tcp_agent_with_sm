@@ -228,7 +228,7 @@ Int32 Parser::parseAddr(TcpParam* param, Char* url) {
     }
 }
 
-Int32 Parser::parseAgentSrv(typeMap& imap, list_head* list) {
+Int32 Parser::parseAgentSrv(Int32 type, typeMap& imap, list_head* list) {
     Int32 ret = 0;
     AgentSrv* obj = NULL;
     Address* addr = NULL;
@@ -241,7 +241,7 @@ Int32 Parser::parseAgentSrv(typeMap& imap, list_head* list) {
     INIT_LIST_NODE(&obj->m_base.m_node);
     INIT_LIST_HEAD(&obj->m_binds); 
     
-    obj->m_base.m_node_type = ENUM_NODE_AGENT_SRV;
+    obj->m_base.m_node_type = type;
 
     /* add to list no matter if ok */
     list_add_back(&obj->m_base.m_node, list);
@@ -281,7 +281,7 @@ Int32 Parser::parseAgentSrv(typeMap& imap, list_head* list) {
     return ret; 
 }
 
-Int32 Parser::parseAgentCli(typeMap& imap, list_head* list) {
+Int32 Parser::parseAgentCli(Int32 type, typeMap& imap, list_head* list) {
     Int32 ret = 0;
     AgentCli* obj = NULL;
     AddrPairs* pairs = NULL;
@@ -294,7 +294,7 @@ Int32 Parser::parseAgentCli(typeMap& imap, list_head* list) {
     INIT_LIST_NODE(&obj->m_base.m_node);
     INIT_LIST_HEAD(&obj->m_pairs); 
     
-    obj->m_base.m_node_type = ENUM_NODE_AGENT_CLI;
+    obj->m_base.m_node_type = type;
 
     /* add to list no matter if ok */
     list_add_back(&obj->m_base.m_node, list);
@@ -404,10 +404,12 @@ Int32 Parser::analyseAgent() {
             break;
         }
 
-        if (ENUM_NODE_AGENT_CLI == type) {
-            ret = parseAgentCli(imap, &m_config.m_agent_list);
-        } else if (ENUM_NODE_AGENT_SRV == type) {
-            ret = parseAgentSrv(imap, &m_config.m_agent_list);
+        if (ENUM_NODE_SESS_LISTENER == type
+            || ENUM_NODE_SESS_LISTENER_PSEUDO == type) {
+            ret = parseAgentCli(type, imap, &m_config.m_agent_list);
+        } else if (ENUM_NODE_USR_LISTENER == type
+            || ENUM_NODE_USR_LISTENER_PSEUDO == type) {
+            ret = parseAgentSrv(type, imap, &m_config.m_agent_list);
         } else {
             ret = -1;
         }
@@ -476,7 +478,8 @@ Void Parser::freeAgents(list_head* list) {
 
         base = (NodeBase*)pos1;
 
-        if (ENUM_NODE_AGENT_CLI == base->m_node_type) {
+        if (ENUM_NODE_SESS_LISTENER == base->m_node_type
+            || ENUM_NODE_SESS_LISTENER_PSEUDO == base->m_node_type) {
             cli = (AgentCli*)pos1;
             
             list_for_each_safe(pos2, n2, &cli->m_pairs) {
@@ -487,7 +490,8 @@ Void Parser::freeAgents(list_head* list) {
             }
 
             I_FREE(cli);
-        } else if (ENUM_NODE_AGENT_SRV == base->m_node_type) {
+        } else if (ENUM_NODE_USR_LISTENER == base->m_node_type
+            || ENUM_NODE_USR_LISTENER_PSEUDO == base->m_node_type) {
             srv = (AgentSrv*)pos1;
             
             list_for_each_safe(pos2, n2, &srv->m_binds) {

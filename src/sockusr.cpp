@@ -57,7 +57,7 @@ Int32 SockUsrListener::procChildExit(ListenerDirty* listener, MsgHdr* msg) {
 
         list_del(&usr->m_base.m_node, &listener->m_usr_que);
 
-        m_center->freeUsrAccpt(usr);
+        FdObjFactory::freeUsrAccpt(usr);
     } else {
         LOG_ERROR("proc_child_user_exit| req_user_id=%u|"
             " user_id=%u| data=%p| msg=invalid data|",
@@ -114,7 +114,9 @@ ListenerDirty* SockUsrListener::setup(const TcpParam* param) {
     } 
 
     info = m_mng->creatBase(fd, TRUE, FALSE);
-    listener = m_center->newListenerDirty();
+    listener = FdObjFactory::newListenerDirty();
+    listener->m_base.m_node_type = getType();
+    
     listener->m_param = param;
     listener->m_fdinfo = info; 
 
@@ -164,6 +166,7 @@ Int32 SockUsrAccpt::process(UserAccpt* usr, MsgHdr* msg) {
     Int32 ret = 0;
     
     if (ENUM_MSG_CMD_TCP_CIPHER == msg->m_cmd
+        || ENUM_MSG_CMD_TCP_PSEUDO == msg->m_cmd
         || ENUM_MSG_SYSTEM_STOP_SESS == msg->m_cmd) {
         ret = transfer2Sess(usr, msg);
     } else if (ENUM_MSG_CMD_START_SESS == msg->m_cmd) {
@@ -550,7 +553,9 @@ UserAccpt* SockUsrAccpt::setup(ListenerDirty* listener, int newfd) {
     /* enable read and write */
     info = m_mng->creatBase(newfd, TRUE, TRUE);
     if (NULL != info) {
-        usr = m_center->newUsrAccpt();
+        usr = FdObjFactory::newUsrAccpt();
+        usr->m_base.m_node_type = getType();
+        
         usr->m_parent = listener;
         usr->m_param = listener->m_param;
         usr->m_fdinfo = info;
@@ -579,7 +584,7 @@ Int32 SockUsrAccpt::procChildExit(UserAccpt* usr, MsgHdr* msg) {
     if (NULL != sess) {        
         order_list_del(&sess->m_base.m_node, &usr->m_session_que);
         
-        m_center->freeSessConn(sess);
+        FdObjFactory::freeSessConn(sess);
 
         LOG_INFO("proc_child_exit| user_id=%u|"
             " session_id=%u| msg=ok|",
@@ -685,6 +690,7 @@ Int32 SockUsrConn::process(UserConn* usr, MsgHdr* msg) {
     Int32 ret = 0;
 
     if (ENUM_MSG_CMD_TCP_CIPHER == msg->m_cmd
+        || ENUM_MSG_CMD_TCP_PSEUDO == msg->m_cmd
         || ENUM_MSG_SYSTEM_STOP_SESS == msg->m_cmd
         || ENUM_MSG_SESS_ARRIVAL == msg->m_cmd) {
         ret = transfer2Sess(usr, msg);
@@ -1036,7 +1042,9 @@ UserConn* SockUsrConn::setup(const TcpParam* param) {
         
         /* if connecting, then disable read */
         info = m_mng->creatBase(fd, FALSE, TRUE); 
-        usr = m_center->newUsrConn(); 
+        usr = FdObjFactory::newUsrConn(); 
+
+        usr->m_base.m_node_type = getType();
         
         usr->m_param = param;
         usr->m_user_id = m_center->nextUsrId();
@@ -1068,7 +1076,7 @@ Int32 SockUsrConn::procChildExit(UserConn* usr, MsgHdr* msg) {
     if (NULL != sess) {        
         order_list_del(&sess->m_base.m_node, &usr->m_session_que);
         
-        m_center->freeSessAccpt(sess);
+        FdObjFactory::freeSessAccpt(sess);
 
         LOG_INFO("proc_child_exit| user_id=%u|"
             " session_id=%u| msg=ok|",

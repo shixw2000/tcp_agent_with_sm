@@ -15,6 +15,7 @@ struct MsgHdr {
 };
 
 struct MsgNotify {
+    Uint64 m_data;
 };
 
 /* this is the header format of session msgs */
@@ -112,12 +113,14 @@ enum EnumMsgCmd {
 
     ENUM_MSG_NOTIFY_NEW_SESS,
     ENUM_MSG_NOTIFY_NEW_USER,
+    ENUM_MSG_NOTIFY_TICK_TIMER,
     
     ENUM_MSG_CMD_START_SESS,
     ENUM_MSG_USR_ARRIVAL,
     ENUM_MSG_SESS_ARRIVAL,
     ENUM_MSG_USR_SETUP_AUTH,
     
+    ENUM_MSG_CMD_TCP_PSEUDO, //unencrypted tcp data for transmission 
     ENUM_MSG_CMD_TCP_PLAIN, 
     ENUM_MSG_CMD_TCP_CIPHER,
     

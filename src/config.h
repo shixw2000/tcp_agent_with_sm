@@ -88,8 +88,8 @@ private:
     
     Int32 getKeyInt(typeMap& imap, const Char key[], Int32* val);
 
-    Int32 parseAgentCli(typeMap& imap, list_head* list);
-    Int32 parseAgentSrv(typeMap& imap, list_head* list);
+    Int32 parseAgentCli(Int32 type, typeMap& imap, list_head* list);
+    Int32 parseAgentSrv(Int32 type, typeMap& imap, list_head* list);
 
     Void freeAgents(list_head* list);
     

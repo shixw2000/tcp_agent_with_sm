@@ -91,7 +91,9 @@ ListenerTcp* SockSessListener::setup(UserConn* usr, const TcpPairs* pairs) {
 
     info = m_mng->creatBase(fd, TRUE, FALSE);
     
-    listener = m_center->newListenerTcp();
+    listener = FdObjFactory::newListenerTcp();
+    listener->m_base.m_node_type = getType();
+    
     listener->m_user = usr;
     listener->m_pairs = pairs;
     
@@ -229,9 +231,10 @@ Int32 SockSessAccpt::procStopSess(SessionAccpt* sess, MsgHdr* msg) {
 
     req = MsgCenter::cast<MsgSessHead>(msg);
     
-    LOG_INFO("proc_sess_stop| user_id=%u|"
+    LOG_INFO("proc_sess_stop| fd=%d| user_id=%u|"
         " sess_id=%u| self_id=%u| msg=peer stop|",
-        req->m_user_id, req->m_session_id, sess->m_session_id);
+        info->m_fd, req->m_user_id, 
+        req->m_session_id, sess->m_session_id);
 
     sess->m_peer_open = FALSE;
     
@@ -267,7 +270,9 @@ SessionAccpt* SockSessAccpt::setup(ListenerTcp* listener, int newfd) {
         /* disable read but write for poll until sess arrival */
         info = m_mng->creatBase(newfd, FALSE, TRUE);
         if (NULL != info) {
-            sess = m_center->newSessAccpt();
+            sess = FdObjFactory::newSessAccpt();
+            sess->m_base.m_node_type = getType();
+            
             sess->m_parent = listener->m_user; 
             sess->m_pairs = listener->m_pairs; 
             sess->m_session_id = m_center->nextSessId();
@@ -412,9 +417,10 @@ Int32 SockSessConn::procStopSess(SessionConn* sess, MsgHdr* msg) {
 
     req = MsgCenter::cast<MsgSessHead>(msg);
     
-    LOG_INFO("proc_sess_stop| user_id=%u|"
+    LOG_INFO("proc_sess_stop| fd=%d| user_id=%u|"
         " sess_id=%u| self_id=%u| msg=peer stop|",
-        req->m_user_id, req->m_session_id, sess->m_session_id);
+        info->m_fd, req->m_user_id, 
+        req->m_session_id, sess->m_session_id);
 
     sess->m_peer_open = FALSE;
     
@@ -467,7 +473,9 @@ SessionConn* SockSessConn::setup(UserAccpt* usr, Uint32 sessId,
         /* if connecting, then disable read */
         info = m_mng->creatBase(fd, FALSE, TRUE); 
 
-        sess = m_center->newSessConn();
+        sess = FdObjFactory::newSessConn();
+        sess->m_base.m_node_type = getType();
+        
         sess->m_parent = usr; 
         sess->m_session_id = sessId;
         sess->m_peer_open = TRUE;
@@ -498,6 +506,87 @@ Int32 SockSessConn::procEnd(SessionConn* sess, MsgHdr* msg) {
     m_mng->notify(sess->m_fdinfo, ENUM_MSG_SYSTEM_EXIT);
 
     MsgCenter::free(msg);
+    return 0;
+}
+
+
+int SockSessConnPseudo::process(SessionConn* sess, MsgHdr* msg) {
+    Int32 ret = 0;
+
+    if (ENUM_MSG_CMD_TCP_PLAIN == msg->m_cmd) {
+        ret = procPlainData(sess, msg);
+    } else if (ENUM_MSG_CMD_TCP_PSEUDO == msg->m_cmd) {
+        ret = procPseudoData(sess, msg);
+    } else {
+        ret = SockSessConn::process(sess, msg); 
+    }
+
+    return ret;
+}
+
+Int32 SockSessConnPseudo::procPlainData(
+    SessionConn* sess, MsgHdr* msg) {
+    UserAccpt* usr = sess->m_parent;
+    MsgTcpPlain* plain = NULL;
+    
+    plain = MsgCenter::cast<MsgTcpPlain>(msg);
+    plain->m_user_id = usr->m_user_id;
+    plain->m_session_id = sess->m_session_id;
+
+    msg->m_cmd = ENUM_MSG_CMD_TCP_PSEUDO;
+    MsgCenter::addCrc(msg);
+    
+    m_mng->sendMsg(usr->m_fdinfo, msg);
+    return 0;
+}
+
+Int32 SockSessConnPseudo::procPseudoData(
+    SessionConn* sess, MsgHdr* msg) {
+
+    msg->m_cmd = ENUM_MSG_CMD_TCP_PLAIN;
+    MsgCenter::addCrc(msg);
+    
+    m_mng->sendMsg(sess->m_fdinfo, msg); 
+    return 0;
+}
+
+
+int SockSessAccptPseudo::process(SessionAccpt* sess, MsgHdr* msg) {
+    Int32 ret = 0;
+
+    if (ENUM_MSG_CMD_TCP_PLAIN == msg->m_cmd) {
+        ret = procPlainData(sess, msg);
+    } else if (ENUM_MSG_CMD_TCP_PSEUDO == msg->m_cmd) {
+        ret = procPseudoData(sess, msg);
+    } else {
+        ret = SockSessAccpt::process(sess, msg); 
+    }
+    
+    return ret;
+}
+
+Int32 SockSessAccptPseudo::procPlainData(SessionAccpt* sess, MsgHdr* msg) {
+    UserConn* usr = sess->m_parent;
+    MsgTcpPlain* plain = NULL;
+    
+    plain = MsgCenter::cast<MsgTcpPlain>(msg);
+    plain->m_user_id = usr->m_user_id;
+    plain->m_session_id = sess->m_session_id;
+
+    msg->m_cmd = ENUM_MSG_CMD_TCP_PSEUDO;
+    MsgCenter::addCrc(msg);
+    
+    m_mng->sendMsg(usr->m_fdinfo, msg);
+    return 0;
+}
+
+Int32 SockSessAccptPseudo::procPseudoData(
+    SessionAccpt* sess, MsgHdr* msg) {
+
+    msg->m_cmd = ENUM_MSG_CMD_TCP_PLAIN;
+    MsgCenter::addCrc(msg);
+    
+    m_mng->sendMsg(sess->m_fdinfo, msg); 
     return 0;
 }
 

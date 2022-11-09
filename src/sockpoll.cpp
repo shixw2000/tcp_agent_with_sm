@@ -27,11 +27,6 @@ Int32 SockPoll::init() {
         return -1;
     } 
 
-    m_event_fd = creatEventFd(); 
-    if (0 > m_event_fd) { 
-        return -1;
-    }
-
     ARR_NEW(struct pollfd, m_capacity, m_fds);
     memset(m_fds, 0, sizeof(struct pollfd) * m_capacity); 
 
@@ -45,7 +40,6 @@ Int32 SockPoll::init() {
 
 Void SockPoll::finish() { 
     if (0 <= m_event_fd) { 
-        closeHd(m_event_fd);
         m_event_fd = -1;
     }
 
@@ -98,25 +92,14 @@ Void SockPoll::resetFd(FdInfo* info) {
 }
 
 int SockPoll::setup() {
-    int ret = 0;
-    FdInfo* info = NULL;
-    EventData* ev = NULL;
-
-    info = creatFd(m_event_fd, TRUE, FALSE); 
-    
-    I_NEW(EventData, ev);
-    memset(ev, 0, sizeof(EventData));
-    
-    INIT_LIST_NODE(&ev->m_base.m_node);
-    ev->m_base.m_node_type = ENUM_NODE_EVENT;
-    ev->m_fdinfo = info; 
-
-    m_mng->addEvent(info, &ev->m_base); 
-    return ret;
+    if (0 <= m_event_fd) {
+        return 0;
+    } else {
+        return -1;
+    }
 }
 
 void SockPoll::teardown() {
-    m_event_fd = -1;
 }
 
 Int32 SockPoll::fillEvent() { 

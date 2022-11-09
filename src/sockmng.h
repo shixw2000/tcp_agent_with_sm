@@ -11,7 +11,6 @@ struct NodeBase;
 class Lock;
 class SockPoll;
 class SockDealer;
-class SockCenter;
 
 class SockMng : public TaskPool, public I_Dispatcher {
 public:
@@ -21,9 +20,7 @@ public:
     virtual Int32 init();
     virtual Void finish(); 
 
-    Void set(SockCenter* center) {
-        m_center = center;
-    }
+    Void set(int fd, I_FdObj* obj);
 
     virtual int start(const char* name);
     virtual void join();
@@ -41,7 +38,7 @@ public:
     Void dealMsg(struct FdInfo*);
     Void endFd(FdInfo* info); 
 
-    Int32 notify(FdInfo* info, Uint16 cmd);
+    Int32 notify(FdInfo* info, Uint16 cmd, Uint64 data = 0);
 
     Void addEvent(FdInfo* info, NodeBase* base);
 
@@ -62,7 +59,7 @@ private:
     static const Int32 DEF_LOCK_ORDER = 3;
     const Int32 m_capacity;
 
-    SockCenter* m_center;
+    I_FdObj* m_obj;
     Lock* m_lock;
     SockPoll* m_poll;
     SockDealer* m_dealer;
