@@ -10,13 +10,17 @@ void usage(int argc, char* argv[]) {
 
 int main(int argc, char* argv[]) {
     int ret = 0;    
-        
+
+    initLib();
+    
     if (2 <= argc) {
         ret = test_main(argc, argv);
     } else {
         usage(argc, argv);
-        return -1;
+        ret = -1;
     }
+
+    finishLib();
     
     return ret;
 }

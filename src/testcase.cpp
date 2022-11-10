@@ -198,6 +198,8 @@ static void mask_sig() {
 static SockCenter* g_center = NULL;
 
 static Void sigHandler(Int32 sig) {
+    LOG_ERROR("*******sig=%d| msg=stop server|", sig);
+    
     if (NULL != g_center) {
         g_center->stopServer();
     }

@@ -6,6 +6,7 @@
 #include"listnode.h"
 #include"interfobj.h"
 #include"config.h"
+#include"ticktimer.h"
 
 
 class SockMng;
@@ -161,6 +162,8 @@ private:
     FdObjFactory* m_fctry;
     EventData* m_event_data;
     TimerData* m_timer_data;
+    struct TimerEle m_minute_ele;
+    struct TimerEle m_hour_ele;
     
     struct SysBase m_base;
 };

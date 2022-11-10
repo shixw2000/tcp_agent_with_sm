@@ -631,6 +631,11 @@ Void SockUsrAccpt::eof(struct FdInfo* info) {
     UserAccpt* usr = (UserAccpt*)info->m_data;
     ListenerDirty* listener = usr->m_parent;
 
+    LOG_INFO("usr_accpt_exit| fd=%d| user_id=%u|"
+        " addr=%s:%d| msg=exit now|",
+        info->m_fd, usr->m_user_id,
+        usr->m_param->m_ip, usr->m_param->m_port);
+
     /* notify to parent */
     m_center->notifyChildUsrExit(listener->m_fdinfo, 
         usr->m_user_id, (Uint64)usr);

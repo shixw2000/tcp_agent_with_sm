@@ -13,6 +13,7 @@ static Uint32 g_tick_time = 0;
 static Uint32 g_tick_cnt = 0;
 static Uint32 g_mono_time = 0;
 static Uint64 g_epoch_time = 0;
+static Uint64 g_sys_time = 0;
 
 Uint32 tick() {
     return g_tick_time;
@@ -24,6 +25,25 @@ Uint32 tick_cnt() {
 
 Uint32 now() {
     return g_mono_time;
+}
+
+Uint64 curr() {
+    return g_sys_time;
+}
+
+void initTime() {
+    g_tick_time = 0;
+    g_mono_time = getMonoTime();
+    g_epoch_time = getSysTime();
+    g_sys_time = to_sec(g_epoch_time);
+    
+    LOG_INFO("prog_timer| sys_time=%llu.%llu|"
+        " mono_time=%u| tick_time=%u| msg=ok|",
+        to_sec(g_epoch_time), to_msec(g_epoch_time),
+        g_mono_time, g_tick_time);
+
+    /* standize the epoch time */
+    g_epoch_time = g_sys_time - g_mono_time;
 }
 
 int EventHandler::readFd(struct FdInfo* info) {
@@ -96,6 +116,7 @@ int TimerHandler::readFd(struct FdInfo* info) {
     Uint32 val = 0;
 
     g_mono_time = getMonoTime();
+    g_sys_time = g_epoch_time + g_mono_time;
     
     ret = readEvent(info->m_fd, &val); 
     if (0 == ret) { 
@@ -178,17 +199,8 @@ TimerData* TimerHandler::setup() {
         timer->m_fdinfo = info;
         m_mng->addEvent(info, &timer->m_base);
 
-        LOG_INFO("++++add_timer| fd=%d| msg=ok|", fd);
-
-        g_tick_time = 0;
-        g_mono_time = getMonoTime();
-        g_epoch_time = getSysTime(); 
+        LOG_INFO("++++add_timer| fd=%d| msg=ok|", fd); 
         
-        LOG_INFO("prog_timer| sys_time=%llu.%llu|"
-            " mono_time=%u| tick_time=%u| msg=ok|",
-            to_sec(g_epoch_time), to_msec(g_epoch_time),
-            g_mono_time, g_tick_time);
-
         return timer;
     } else {
         LOG_ERROR("****add_timer| msg=error|");

@@ -3,7 +3,7 @@ RM=rm -f
 
 VERSION=$(shell date "+%F_%T")
 COMILE_OPT=
-MACROS=-D__BUILD_VER__="\"V1.0 $(VERSION)\"" -D__LOG_LEVEL__=1 
+MACROS=-D__BUILD_VER__="\"V1.0 $(VERSION)\"" -D__LOG_LEVEL__=1 -D__FILE_LOG__
 
 ifndef debug
 CC=g++ -s -O3 -W -Wall $(MACROS) $(COMILE_OPT)

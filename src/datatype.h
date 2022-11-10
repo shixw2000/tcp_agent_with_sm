@@ -301,5 +301,15 @@ enum EnumPkeyAlgo {
     ENUM_PKEY_SM2,
 };
 
+enum EnumTimerType {
+    ENUM_TIMER_TYPE_MINUTELY,
+    ENUM_TIMER_TYPE_HOURLY,
+
+    ENUM_TIMER_TYPE_END
+};
+
+static const Uint32 DEF_MINUTE_TICK_CNT = 60;
+static const Uint32 DEF_HOUR_TICK_CNT = DEF_MINUTE_TICK_CNT * 60;
+
 #endif
 

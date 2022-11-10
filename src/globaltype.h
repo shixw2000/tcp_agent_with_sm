@@ -6,6 +6,36 @@
 #include"sysoper.h"
 
 
+extern Void initLib();
+extern Void finishLib();
+extern Uint32 tick();
+extern Uint32 tick_cnt();
+extern Uint32 now();
+extern Uint64 curr();
+extern Void initTime();
+
+
+#ifndef __LOG_LEVEL__
+#define __LOG_LEVEL__ 0
+#endif
+
+extern Void setLogLevel(Int32 level);
+
+#ifdef __FILE_LOG__
+
+extern Void initLog();
+extern Void formatLog(int level, const char format[], ...);
+extern Void finishLog(); 
+
+#define LOG_DEBUG(format,args...)  formatLog(2, format, ##args)
+#define LOG_INFO(format,args...)  formatLog(1, format, ##args)
+#define LOG_ERROR(format,args...)  formatLog(0, format, ##args)
+#define RAW_LOG(format,args...) formatLog(3, format, ##args)
+#else
+
+static inline Void initLog() {}
+static inline Void finishLog() {}
+
 #define PRINT_LOG(format,args...) do {\
     fprintf(stdout, "<%u-%u-%u> ", now(), tick(), tick_cnt()); \
     fprintf(stdout, format, ##args); \
@@ -18,34 +48,24 @@
     fprintf(stderr, "|\n"); \
 } while (0)
 
-#ifndef __LOG_LEVEL__
-#define __LOG_LEVEL__ 0
-#endif
-
 #if (__LOG_LEVEL__ >= 2)
 #define LOG_DEBUG(format,args...) PRINT_LOG(format, ##args)
+#define LOG_INFO(format,args...) PRINT_LOG(format, ##args)
+#define LOG_ERROR(format,args...) PRINT_LOG(format, ##args)
 #define RAW_LOG(format,args...) fprintf(stdout, format, ##args);
-#else 
+#elif (__LOG_LEVEL__ >= 1)
 #define LOG_DEBUG(format,args...) 
+#define LOG_INFO(format,args...) PRINT_LOG(format, ##args)
+#define LOG_ERROR(format,args...) PRINT_LOG(format, ##args)
+#define RAW_LOG(format,args...)
+#else
+#define LOG_DEBUG(format,args...) 
+#define LOG_INFO(format,args...)
+#define LOG_ERROR(format,args...) PRINT_LOG(format, ##args)
 #define RAW_LOG(format,args...)
 #endif
 
-#if (__LOG_LEVEL__ >= 1)
-#define LOG_INFO(format,args...) PRINT_LOG(format, ##args)
-#else
-#define LOG_INFO(format,args...)
-#endif 
-
-#if (__LOG_LEVEL__ >= 0)
-#define LOG_ERROR(format,args...) PRINT_LOG(format, ##args)
-#else
-#define LOG_ERROR(format,args...)
 #endif
-
-extern Void initLib();
-extern Uint32 tick();
-extern Uint32 tick_cnt();
-extern Uint32 now();
 
 #define ERR_MSG() strerror(errno) 
 
