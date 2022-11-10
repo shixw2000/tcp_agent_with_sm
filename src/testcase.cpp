@@ -195,27 +195,42 @@ static void mask_sig() {
     armSig(SIGUSR1, &signon);
 }
 
+static SockCenter* g_center = NULL;
+
+static Void sigHandler(Int32 sig) {
+    if (NULL != g_center) {
+        g_center->stopServer();
+    }
+}
+
 void testAgent(const char* path) {
     Int32 ret = 0;
-    SockCenter* center = NULL;
+
+    mask_sig();
+    
+    armSig(SIGHUP, &sigHandler);
+    armSig(SIGINT, &sigHandler);
+    armSig(SIGQUIT, &sigHandler);
+    armSig(SIGTERM, &sigHandler);
 
     do {
-        I_NEW(SockCenter, center);
-        center->set(path);
-        ret = center->init();
+        I_NEW(SockCenter, g_center);
+        g_center->set(path);
+        ret = g_center->init();
         if (0 != ret) {
             break;
         }
 
-        ret = center->startServer();
+        ret = g_center->startServer();
         if (0 != ret) {
             break;
         }
 
-        center->wait();
+        g_center->wait();
     } while (0);
 
-    center->finish();
+    g_center->finish();
+    I_FREE(g_center);
     return;
 }
 

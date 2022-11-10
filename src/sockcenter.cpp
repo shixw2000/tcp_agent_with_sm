@@ -256,6 +256,37 @@ void FdObjFactory::eof(struct FdInfo* info) {
     return;
 }
 
+
+Void FdObjFactory::freeListenerUsrQue(list_head* list) {
+    list_node* pos = NULL;
+    list_node* n = NULL;
+    ListenerDirty* listener = NULL;
+    
+    if (!list_empty(list)) {
+        list_for_each_safe(pos, n, list) {
+            list_del(pos, list);
+            
+            listener = (ListenerDirty*)pos; 
+            freeListenerDirty(listener);
+        }
+    }
+}
+
+Void FdObjFactory::freeListenerSessQue(list_head* list) {
+    list_node* pos = NULL;
+    list_node* n = NULL;
+    ListenerTcp* listener = NULL;
+    
+    if (!list_empty(list)) {
+        list_for_each_safe(pos, n, list) {
+            list_del(pos, list);
+            
+            listener = (ListenerTcp*)pos; 
+            freeListenerTcp(listener);
+        }
+    }
+}
+
 Void FdObjFactory::freeUsrAccptQue(list_head* list) {
     list_node* pos = NULL;
     list_node* n = NULL;
@@ -443,7 +474,15 @@ ListenerTcp* FdObjFactory::newListenerTcp() {
 }
 
 Void FdObjFactory::freeListenerTcp(ListenerTcp* listener) {
-    I_FREE(listener);
+    if (NULL != listener) {
+        if (NULL != listener->m_fdinfo) {
+            freeFd(listener->m_fdinfo);
+
+            listener->m_fdinfo = NULL;
+        }
+        
+        I_FREE(listener);
+    }
 }
 
 ListenerDirty* FdObjFactory::newListenerDirty() {
@@ -462,6 +501,12 @@ ListenerDirty* FdObjFactory::newListenerDirty() {
 Void FdObjFactory::freeListenerDirty(ListenerDirty* listener) {
     if (NULL != listener) {
         freeUsrAccptQue(&listener->m_usr_que);
+
+        if (NULL != listener->m_fdinfo) {
+            freeFd(listener->m_fdinfo);
+
+            listener->m_fdinfo = NULL;
+        }
         
         I_FREE(listener);
     }
@@ -596,6 +641,7 @@ Void FdObjFactory::freeUsrConn(UserConn* usr) {
         usr->m_evp_snd = NULL;
     }
   
+    freeListenerSessQue(&usr->m_listener_que);
     freeSessAccptQue(&usr->m_session_que);
 
     if (NULL != usr->m_fdinfo) {
@@ -609,7 +655,8 @@ Void FdObjFactory::freeUsrConn(UserConn* usr) {
 
 
 SockCenter::SockCenter() {
-    INIT_LIST_HEAD(&m_list_service);
+    INIT_LIST_HEAD(&m_list_server);
+    INIT_LIST_HEAD(&m_list_client);
     
     m_last_session_id = 0;
     m_last_user_id = 0;
@@ -661,6 +708,9 @@ Int32 SockCenter::init() {
 }
 
 Void SockCenter::finish() {
+    FdObjFactory::freeListenerUsrQue(&m_list_server);
+    FdObjFactory::freeUsrConnQue(&m_list_client);
+    
     if (NULL != m_mng) {
         m_mng->finish();
         I_FREE(m_mng);
@@ -979,12 +1029,12 @@ Int32 SockCenter::startServer() {
             || ENUM_NODE_SESS_LISTENER_PSEUDO == base->m_node_type) {
             cli = (AgentCli*)base;
             
-            ret = addAgentCli(cli, &m_list_service);
+            ret = addAgentCli(cli, &m_list_client);
         } else if (ENUM_NODE_USR_LISTENER == base->m_node_type
             || ENUM_NODE_USR_LISTENER_PSEUDO == base->m_node_type) {
             srv = (AgentSrv*)base;
             
-            ret = addAgentSrv(srv, &m_list_service);
+            ret = addAgentSrv(srv, &m_list_server);
         } else {
             ret = -1;
         }

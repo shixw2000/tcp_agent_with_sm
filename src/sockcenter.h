@@ -44,6 +44,8 @@ public:
     virtual Void eof(struct FdInfo* info);
 
 public:
+    static Void freeListenerUsrQue(list_head* list);
+    static Void freeListenerSessQue(list_head* list);
     static Void freeUsrAccptQue(list_head* list);
     static Void freeUsrConnQue(list_head* list);
     static Void freeSessAccptQue(order_list_head* list);
@@ -149,7 +151,8 @@ protected:
     virtual Void doTimeout(struct TimerEle* ele);
 
 private:
-    list_head m_list_service;
+    list_head m_list_server;
+    list_head m_list_client;
     Uint32 m_last_session_id;
     Uint32 m_last_user_id;
     const Char* m_path;
