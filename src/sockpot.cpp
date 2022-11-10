@@ -139,7 +139,7 @@ Int32 TimerHandler::procTickTimer(TimerData* timer, MsgHdr* msg) {
     if (1 < cnt) {
         LOG_INFO("tick_timer| req_tick=%u|", cnt);
     } else {
-        LOG_INFO("tick_timer");
+        LOG_DEBUG("tick_timer");
     }
 
     MsgCenter::free(msg);
