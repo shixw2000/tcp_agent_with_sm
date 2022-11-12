@@ -119,6 +119,7 @@ enum EnumMsgCmd {
     ENUM_MSG_USR_ARRIVAL,
     ENUM_MSG_SESS_ARRIVAL,
     ENUM_MSG_USR_SETUP_AUTH,
+    ENUM_MSG_HEART_BEAT,
     
     ENUM_MSG_CMD_TCP_PSEUDO, //unencrypted tcp data for transmission 
     ENUM_MSG_CMD_TCP_PLAIN, 

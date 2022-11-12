@@ -3,28 +3,31 @@
 #include"globaltype.h"
 #include"taskpool.h"
 #include"listnode.h"
+#include"interfobj.h"
+#include"datatype.h"
 
 
-struct pollfd;
-struct FdInfo;
 class SockMng;
+class TickTimer;
 
-class SockPoll : public TaskThread {
+class SockPoll : public TaskThread, public I_TimerDealer {
 public:
-    SockPoll(int capacity, SockMng* mng);
+    explicit SockPoll(int capacity);
     ~SockPoll();
 
     virtual int init();
     virtual void finish();
 
-    void set(int fd) {
-        m_event_fd = fd;
-    }
+    Void set(SockMng* mng);
 
     FdInfo* creatFd(Int32 fd, Bool testRd, Bool testWr);
     
     virtual void procTaskEnd(struct Task* task);
     virtual unsigned int procTask(struct Task* task);
+
+    virtual Void doTimeout(struct TimerEle* ele);
+    Void doTick(Uint32 cnt);
+    void addTimer(struct TimerEle* ele, Int32 type, Uint32 interval);
     
 protected: 
     virtual int setup();
@@ -37,6 +40,7 @@ protected:
     virtual void preTasks();
 
     Void resetFd(FdInfo* info);
+    
 
 private:
     Int32 fillEvent();
@@ -48,17 +52,31 @@ private:
     Int32 writeMsg(FdInfo* info);
     Int32 readMsg(FdInfo* info);
 
+    Void flashTimeout();
+    Void addFlash(FdInfo* info);
+    Void updateRdFlash(FdInfo* info);
+    Void updateWrFlash(FdInfo* info);
+    Void delFlash(FdInfo* info);
+
+    Int32 creatTimer();
+    Int32 creatEvent();
+
+
 private: 
     const Int32 m_capacity;
     
     struct pollfd* m_fds;
     struct FdInfo* m_infos;
+    TickTimer* m_timer;
     SockMng* m_mng;
+    FdInfo* m_event_fd;
+    FdInfo* m_timer_fd;
     
     list_head m_rd_root;
     list_head m_run_root; 
-
-    int m_event_fd;
+    list_head m_flash_timeout_que;
+    
+    struct TimerEle m_chk_flash_ele; 
 };
 
 #endif

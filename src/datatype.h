@@ -10,6 +10,14 @@ struct UserConn;
 struct EvpBase;
 class TickTimer;
 
+struct TimerEle {
+    hlist_node m_node;
+    TickTimer* m_base;
+    Uint32 m_expires;
+    Uint32 m_interval; 
+    Int32 m_type;
+};
+
 struct TcpParam {
     Int32 m_port;
     Int32 m_addr_len;
@@ -46,19 +54,6 @@ struct ExtraData {
 struct NodeBase {
     list_node m_node;
     Int32 m_node_type;
-};
-
-struct EventData {
-    NodeBase m_base;
-
-    FdInfo* m_fdinfo;
-};
-
-struct TimerData {
-    NodeBase m_base;
-
-    FdInfo* m_fdinfo;
-    TickTimer* m_timer;
 };
 
 struct ListenerTcp {
@@ -190,8 +185,11 @@ struct FdInfo {
     struct Task m_mng_task;
     struct Task m_deal_task; 
 
+    struct TimerEle m_io_timer;
+
     list_node m_run_node;
     list_node m_rd_node;
+    list_node m_flash_node;
 
     list_head m_rd_que;
     list_head m_wr_que;
@@ -204,6 +202,7 @@ struct FdInfo {
     
     Int32 m_fd;
     Int32 m_fd_type;
+    Uint32 m_last_time;
     
     Bool m_test_rd; 
     Bool m_rd_err;
@@ -224,14 +223,20 @@ enum EnumNodeType {
     ENUM_NODE_SESS_LISTENER_PSEUDO,
     ENUM_NODE_USR_LISTENER_PSEUDO, 
     
+    ENUM_NODE_SOCK_MIN,   // sock min type
+    
     ENUM_NODE_SESS_ACCPT,
     ENUM_NODE_SESS_CONN,
-    ENUM_NODE_USR_ACCPT,
-    ENUM_NODE_USR_CONN, 
-
     ENUM_NODE_SESS_ACCPT_PSEUDO,
     ENUM_NODE_SESS_CONN_PSEUDO,
+
+    ENUM_NODE_SOCK_RDWR, // rdwr delimiter
+    
+    ENUM_NODE_USR_ACCPT,
+    ENUM_NODE_USR_CONN, 
     ENUM_NODE_USR_ACCPT_PSEUDO,
+
+    ENUM_NODE_SOCK_MAX, // sock max type
     
     ENUM_NODE_EVENT,
     ENUM_NODE_TIMER, 
@@ -305,11 +310,18 @@ enum EnumTimerType {
     ENUM_TIMER_TYPE_MINUTELY,
     ENUM_TIMER_TYPE_HOURLY,
 
+    ENUM_TIMER_CHK_FLASH,
+    ENUM_TIMER_HEAR_BEAT,
+
     ENUM_TIMER_TYPE_END
 };
 
 static const Uint32 DEF_MINUTE_TICK_CNT = 60;
 static const Uint32 DEF_HOUR_TICK_CNT = DEF_MINUTE_TICK_CNT * 60;
+
+/* sock flash timeout */
+static const Uint32 DEF_HEART_BEAT_INTERVAL = 30;
+static const Uint32 MAX_FLASH_TIMEOUT_TICK = DEF_HEART_BEAT_INTERVAL * 6; 
 
 #endif
 

@@ -3,30 +3,40 @@
 #include"sockutil.h"
 #include"sockmng.h"
 #include"datatype.h"
+#include"ticktimer.h"
+#include"sockcenter.h"
 
 
-SockPoll::SockPoll(Int32 capacity, SockMng* mng) : m_capacity(capacity) {
-    m_mng = mng;
+SockPoll::SockPoll(Int32 capacity) : m_capacity(capacity) {
+    m_mng = NULL;
     m_infos = NULL;
+    m_timer = NULL;
 
     m_fds = NULL; 
-    m_event_fd = -1;
+    m_event_fd = NULL;
+    m_timer_fd = NULL;
+
+    INIT_LIST_HEAD(&m_rd_root);
+    INIT_LIST_HEAD(&m_run_root);
+    INIT_LIST_HEAD(&m_flash_timeout_que);    
+
+    INIT_TIMER_ELE(&m_chk_flash_ele);
 }
 
 SockPoll::~SockPoll() {
 }
 
 Int32 SockPoll::init() {
-    Int32 ret = 0;
-
-    INIT_LIST_HEAD(&m_rd_root);
-    INIT_LIST_HEAD(&m_run_root);
+    Int32 ret = 0; 
 
     ret = TaskThread::init();
     if (0 != ret) {
         return -1;
     } 
 
+    I_NEW(TickTimer, m_timer);
+    m_timer->setDealer(this);
+    
     ARR_NEW(struct pollfd, m_capacity, m_fds);
     memset(m_fds, 0, sizeof(struct pollfd) * m_capacity); 
 
@@ -35,12 +45,28 @@ Int32 SockPoll::init() {
         resetFd(&m_infos[i]);
     }
 
+    ret = creatEvent();
+    if (0 != ret) {
+        return ret;
+    }
+
+    ret = creatTimer();
+    if (0 != ret) {
+        return ret;
+    }
+
     return ret;
 }
 
-Void SockPoll::finish() { 
-    if (0 <= m_event_fd) { 
-        m_event_fd = -1;
+Void SockPoll::finish() {     
+    if (NULL != m_event_fd) { 
+        FdObjFactory::freeFd(m_event_fd);
+        m_event_fd = NULL;
+    }
+
+    if (NULL != m_timer_fd) { 
+        FdObjFactory::freeFd(m_timer_fd);
+        m_timer_fd = NULL;
     }
 
     if (NULL != m_infos) { 
@@ -51,7 +77,15 @@ Void SockPoll::finish() {
         ARR_FREE(m_fds);
     } 
 
+    if (NULL != m_timer) {        
+        I_FREE(m_timer);
+    }
+
     TaskThread::finish();
+}
+
+Void SockPoll::set(SockMng* mng) {
+    m_mng = mng;
 }
 
 FdInfo* SockPoll::creatFd(Int32 fd, Bool testRd, Bool testWr) {
@@ -81,8 +115,11 @@ Void SockPoll::resetFd(FdInfo* info) {
     INIT_TASK(&info->m_deal_task);
     INIT_TASK(&info->m_mng_task);
 
+    INIT_TIMER_ELE(&info->m_io_timer);
+
     INIT_LIST_NODE(&info->m_run_node);
     INIT_LIST_NODE(&info->m_rd_node);
+    INIT_LIST_NODE(&info->m_flash_node);
 
     INIT_LIST_HEAD(&info->m_rd_que);
     INIT_LIST_HEAD(&info->m_wr_que); 
@@ -92,14 +129,32 @@ Void SockPoll::resetFd(FdInfo* info) {
 }
 
 int SockPoll::setup() {
-    if (0 <= m_event_fd) {
-        return 0;
-    } else {
-        return -1;
-    }
+    addTask(&m_event_fd->m_wr_task, BIT_EVENT_NORM); 
+    addTask(&m_timer_fd->m_wr_task, BIT_EVENT_NORM); 
+    
+    addTimer(&m_chk_flash_ele, ENUM_TIMER_CHK_FLASH, DEF_HEART_BEAT_INTERVAL);
+    return 0;
 }
 
 void SockPoll::teardown() {
+    list_node* pos = NULL;
+    list_node* n = NULL;
+    
+    if (NULL != m_timer) {
+        m_timer->stop();
+    }
+
+    list_for_each_safe(pos, n, &m_run_root) {
+        list_del(pos, &m_run_root);
+    }
+
+    list_for_each_safe(pos, n, &m_rd_root) {
+        list_del(pos, &m_run_root);
+    }
+
+    list_for_each_safe(pos, n, &m_flash_timeout_que) {
+        list_del(pos, &m_flash_timeout_que);
+    }
 }
 
 Int32 SockPoll::fillEvent() { 
@@ -187,7 +242,7 @@ Int32 SockPoll::pollEvent(int timeout) {
 } 
 
 Void SockPoll::alarm() {
-    writeEvent(m_event_fd);
+    writeEvent(m_event_fd->m_fd);
 }
 
 Void SockPoll::wait() {
@@ -245,6 +300,8 @@ unsigned int SockPoll::procTask(struct Task* task) {
         /* add a new info */
         list_add_back(&info->m_run_node, &m_run_root); 
 
+        addFlash(info);
+
         info->m_io_run = TRUE; 
         return BIT_EVENT_NORM;
     } 
@@ -276,12 +333,10 @@ void SockPoll::procTaskEnd(struct Task* task) {
         /* send the remainder msgs */
         writeMsg(info);
     }
+
+    delTimer(&info->m_io_timer);
     
-    if (ENUM_NODE_SESS_ACCPT <= info->m_fd_type
-        && ENUM_NODE_USR_CONN >= info->m_fd_type) {
-        /* sock data */
-        shutdownHd(info->m_fd);
-    }  
+    delFlash(info);
 
     m_mng->notify(info, ENUM_MSG_SYSTEM_IO_END); 
     return;
@@ -292,6 +347,8 @@ Int32 SockPoll::writeMsg(FdInfo* info) {
     Int32 ret = 0;
 
     ret = m_mng->writeMsg(info);
+
+    //updateWrFlash(info); 
     return ret;
 }
 
@@ -300,6 +357,154 @@ Int32 SockPoll::readMsg(FdInfo* info) {
     Int32 ret = 0;
     
     ret = m_mng->readMsg(info); 
+
+    updateRdFlash(info); 
     return ret;
+}
+
+Void SockPoll::doTick(Uint32 cnt) {
+    m_timer->tick(cnt); 
+}
+
+void SockPoll::addTimer(struct TimerEle* ele, 
+    Int32 type, Uint32 interval) {
+    ele->m_type = type;
+    ele->m_interval = interval;
+    
+    m_timer->addTimer(ele);
+}
+
+Void SockPoll::flashTimeout() {
+    Uint32 now = 0;
+    Uint32 dead_time = 0;
+    list_node* pos = NULL;
+    list_node* n = NULL;
+    FdInfo* info = NULL;
+
+    now = m_timer->monoTick();
+
+    if (MAX_FLASH_TIMEOUT_TICK <= now) {
+        LOG_DEBUG("chk_flash_timeout| now=%u|", now);
+        
+        dead_time = now - MAX_FLASH_TIMEOUT_TICK;
+        
+        list_for_each_safe(pos, n, &m_flash_timeout_que) { 
+            info = list_entry(pos, FdInfo, m_flash_node);
+
+            if (info->m_last_time <= dead_time) { 
+                LOG_DEBUG("***flash_timeout| fd=%d| interval=%d| now=%u|"
+                    " last_time=%u| msg=timeout and close|",
+                    info->m_fd, MAX_FLASH_TIMEOUT_TICK,
+                    now, info->m_last_time);
+                
+                list_del(pos, &m_flash_timeout_que);
+                m_mng->closeMng(info);
+            } else {
+                break;
+            }
+        }
+    }
+}
+
+/* just monitor user socket, */
+Void SockPoll::addFlash(FdInfo* info) {
+    if (ENUM_NODE_SOCK_RDWR < info->m_fd_type 
+        && ENUM_NODE_SOCK_MAX > info->m_fd_type) {
+    
+        info->m_last_time = m_timer->monoTick();
+
+        /* go to tail of the que */
+        list_add_back(&info->m_flash_node, &m_flash_timeout_que); 
+
+        /* start heart beat in poll thread for user socket */
+        addTimer(&info->m_io_timer, ENUM_TIMER_HEAR_BEAT, 
+            DEF_HEART_BEAT_INTERVAL);
+    }
+}
+
+Void SockPoll::updateRdFlash(FdInfo* info) {
+    if (ENUM_NODE_SOCK_RDWR < info->m_fd_type 
+        && ENUM_NODE_SOCK_MAX > info->m_fd_type) {
+    
+        info->m_last_time = m_timer->monoTick();
+
+        /* go to tail of the que */
+        list_del(&info->m_flash_node, &m_flash_timeout_que);
+        list_add_back(&info->m_flash_node, &m_flash_timeout_que); 
+    }
+}
+
+Void SockPoll::updateWrFlash(FdInfo* info) {
+    if (ENUM_NODE_SOCK_MIN < info->m_fd_type 
+        && ENUM_NODE_SOCK_RDWR > info->m_fd_type) {
+    
+        info->m_last_time = m_timer->monoTick();
+
+        /* go to tail of the que */
+        list_del(&info->m_flash_node, &m_flash_timeout_que);
+        list_add_back(&info->m_flash_node, &m_flash_timeout_que); 
+    }
+}
+
+Void SockPoll::delFlash(FdInfo* info) {
+    if (ENUM_NODE_SOCK_MIN < info->m_fd_type 
+        && ENUM_NODE_SOCK_MAX > info->m_fd_type) {
+
+        /* sock data */
+        shutdownHd(info->m_fd);
+
+        /* exit que of flash */
+        list_del(&info->m_flash_node, &m_flash_timeout_que);
+    }
+}
+
+Int32 SockPoll::creatEvent() {
+    int fd = -1;
+    
+    fd = creatEventFd(); 
+    if (0 <= fd) { 
+        m_event_fd = creatFd(fd, TRUE, FALSE); 
+        m_event_fd->m_fd_type = ENUM_NODE_EVENT; 
+
+        LOG_INFO("++++creat_event| fd=%d| msg=ok|", fd);
+
+        return 0;
+    } else {
+        LOG_ERROR("****creat_event| msg=error|");
+        
+        return -1;
+    }
+}
+
+Int32 SockPoll::creatTimer() {
+    int fd = -1;
+    
+    fd = creatTimerFd(1000); 
+    if (0 <= fd) { 
+        m_timer_fd = creatFd(fd, TRUE, FALSE); 
+        m_timer_fd->m_fd_type = ENUM_NODE_TIMER;
+
+        LOG_INFO("++++creat_timer| fd=%d| msg=ok|", fd); 
+        
+        return 0;
+    } else {
+        LOG_ERROR("****creat_timer| msg=error|");
+        
+        return -1;
+    }
+}
+
+Void SockPoll::doTimeout(struct TimerEle* ele) {
+    if (ENUM_TIMER_HEAR_BEAT == ele->m_type) {
+        FdInfo* info = list_entry(ele, FdInfo, m_io_timer);
+
+        m_mng->sendHeartBeat(info);
+        updateTimer(ele);
+    } else if (ENUM_TIMER_CHK_FLASH== ele->m_type) { 
+        flashTimeout();
+
+        updateTimer(ele);
+    } else {
+    }
 }
 

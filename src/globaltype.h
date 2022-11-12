@@ -8,8 +8,6 @@
 
 extern Void initLib();
 extern Void finishLib();
-extern Uint32 tick();
-extern Uint32 tick_cnt();
 extern Uint32 now();
 extern Uint64 curr();
 extern Void initTime();
@@ -37,7 +35,7 @@ static inline Void initLog() {}
 static inline Void finishLog() {}
 
 #define PRINT_LOG(format,args...) do {\
-    fprintf(stdout, "<%u-%u-%u> ", now(), tick(), tick_cnt()); \
+    fprintf(stdout, "<%u> ", now()); \
     fprintf(stdout, format, ##args); \
     fprintf(stdout, "|\n"); \
 } while (0)

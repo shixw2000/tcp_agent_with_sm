@@ -23,10 +23,9 @@ public:
     virtual Int32 procMsg(FdInfo* info, MsgHdr* msg);
     virtual Void eof(struct FdInfo* info);
 
-    EventData* setup();
 
 private:
-    Int32 procEnd(EventData* ev, MsgHdr* msg);
+    Int32 procEnd(struct FdInfo* info, MsgHdr* msg);
 
 private:
     SockMng* m_mng;
@@ -47,11 +46,10 @@ public:
     virtual Int32 procMsg(FdInfo* info, MsgHdr* msg);
     virtual Void eof(struct FdInfo* info);
 
-    TimerData* setup();
 
 private:
-    Int32 procTickTimer(TimerData* timer, MsgHdr* msg);
-    Int32 procEnd(TimerData* timer, MsgHdr* msg);
+    Int32 procTickTimer(struct FdInfo* info, MsgHdr* msg);
+    Int32 procEnd(struct FdInfo* info, MsgHdr* msg);
 
 private:
     SockMng* m_mng;

@@ -420,48 +420,6 @@ Void FdObjFactory::freeEvp(EvpBase* evp) {
     I_FREE(evp);
 }
 
-EventData* FdObjFactory::newEventData() {
-    EventData* ev = NULL;
-
-    I_NEW(EventData, ev);
-    memset(ev, 0, sizeof(EventData));
-    
-    resetNode(&ev->m_base);
-
-    return ev;
-}
-
-Void FdObjFactory::freeEventData(EventData* ev) {
-    if (NULL != ev) {  
-        I_FREE(ev);
-    }
-}
-
-TimerData* FdObjFactory::newTimerData() {
-    TimerData* timer = NULL;
-
-    I_NEW(TimerData, timer);
-    memset(timer, 0, sizeof(TimerData));
-
-    I_NEW(TickTimer, timer->m_timer);
-    
-    resetNode(&timer->m_base);
-
-    return timer;
-}
-
-Void FdObjFactory::freeTimerData(TimerData* timer) {
-    if (NULL != timer) {  
-        if (NULL != timer->m_timer) {
-            timer->m_timer->stop();
-            
-            I_FREE(timer->m_timer);
-        }
-        
-        I_FREE(timer);
-    }
-}
-
 ListenerTcp* FdObjFactory::newListenerTcp() {
     ListenerTcp* listener = NULL; 
     
@@ -571,7 +529,7 @@ UserAccpt* FdObjFactory::newUsrAccpt() {
     resetSock(&user->m_sock);
 
     INIT_ORDER_LIST_HEAD(&user->m_session_que, &cmpSessConnID);
-
+    
     user->m_evp_rcv = creatEvp();
     user->m_evp_snd = creatEvp();
 
@@ -616,8 +574,8 @@ UserConn* FdObjFactory::newUsrConn() {
     resetSock(&user->m_sock);
     
     INIT_LIST_HEAD(&user->m_listener_que);
-    INIT_ORDER_LIST_HEAD(&user->m_session_que, &cmpSessAccptID);
-
+    INIT_ORDER_LIST_HEAD(&user->m_session_que, &cmpSessAccptID);    
+    
     user->m_evp_rcv = creatEvp();
     user->m_evp_snd = creatEvp();
 
@@ -656,25 +614,19 @@ Void FdObjFactory::freeUsrConn(UserConn* usr) {
 
 SockCenter::SockCenter() {
     INIT_LIST_HEAD(&m_list_server);
-    INIT_LIST_HEAD(&m_list_client);
-
-    INIT_TIMER_ELE(&m_minute_ele);
-    INIT_TIMER_ELE(&m_hour_ele);
+    INIT_LIST_HEAD(&m_list_client); 
     
     m_last_session_id = 0;
     m_last_user_id = 0;
 
+    m_path = NULL;
     m_parser = NULL;
     m_mng = NULL;
     m_fctry = NULL;
-    m_event_data = NULL;
-    m_timer_data = NULL;
 }
 
 Int32 SockCenter::init() {
     Int32 ret = 0;
-    EventHandler* event = NULL;
-    TimerHandler* timer = NULL;
 
     do {        
         I_NEW(Parser, m_parser);
@@ -683,6 +635,8 @@ Int32 SockCenter::init() {
             break;
         } 
 
+        memset(&m_base, 0, sizeof(m_base));
+        
         getRand(m_base.m_seid, DEF_SEID_SIZE);
         getRand(m_base.m_rand, DEF_RAND_CODE_SIZE);
         
@@ -698,31 +652,15 @@ Int32 SockCenter::init() {
             break;
         }
 
-        event = m_fctry->getObj<EventHandler>(ENUM_NODE_EVENT);
-        m_event_data = event->setup();
-
-        m_mng->set(m_event_data->m_fdinfo->m_fd, m_fctry);
-
-        timer = m_fctry->getObj<TimerHandler>(ENUM_NODE_TIMER);
-        m_timer_data = timer->setup();
-
-        /* add a minutely timer */
-        m_minute_ele.m_type = ENUM_TIMER_TYPE_MINUTELY;
-        m_minute_ele.m_interval = DEF_MINUTE_TICK_CNT;
-        m_timer_data->m_timer->addTimer(&m_minute_ele);
-
-        /* add a hourly timer */
-        m_hour_ele.m_type = ENUM_TIMER_TYPE_HOURLY;
-        m_hour_ele.m_interval = ENUM_TIMER_TYPE_HOURLY;
-        m_timer_data->m_timer->addTimer(&m_hour_ele);
+        m_mng->set(m_fctry); 
     } while (0);
 
     return ret;
 }
 
-Void SockCenter::finish() {
+Void SockCenter::finish() { 
     FdObjFactory::freeListenerUsrQue(&m_list_server);
-    FdObjFactory::freeUsrConnQue(&m_list_client);
+    FdObjFactory::freeUsrConnQue(&m_list_client); 
     
     if (NULL != m_mng) {
         m_mng->finish();
@@ -987,17 +925,6 @@ Int32 SockCenter::digest(EvpBase* evp, const Void* data,
     outlen = evp->m_digest.digest(data, len, out);
 
     return outlen;
-}
-
-Void SockCenter::doTimeout(struct TimerEle* ele) {
-    if (ENUM_TIMER_TYPE_MINUTELY== ele->m_type) {
-        LOG_INFO("minutely_task| msg=ok|");
-
-        updateTimer(ele);
-    } else if (ENUM_TIMER_TYPE_HOURLY== ele->m_type) {
-        updateTimer(ele);
-    } else {
-    }
 }
 
 Int32 SockCenter::chkConn(FdInfo* info) {

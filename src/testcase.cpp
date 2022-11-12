@@ -223,11 +223,7 @@ void testAgent(const char* path) {
             break;
         }
 
-        ret = g_center->startServer();
-        if (0 != ret) {
-            break;
-        }
-
+        g_center->startServer(); 
         g_center->wait();
     } while (0);
 

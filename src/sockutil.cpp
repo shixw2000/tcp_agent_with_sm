@@ -32,21 +32,22 @@ Int32 creatTcpSrv(const TcpParam* param) {
         
         ret = bind(fd, (const struct sockaddr*)param->m_addr, param->m_addr_len);
         if (0 != ret) {
-            LOG_ERROR("bind_tcp| ret=%d| fd=%d| error=%s|",
-                ret, fd, ERR_MSG());
+            LOG_ERROR("bind_tcp| ret=%d| fd=%d| ip=%s| port=%d| error=%s|",
+                ret, fd, param->m_ip, param->m_port, ERR_MSG());
             
             break; 
         }
 
         ret = listen(fd, 10000);
         if (0 != ret) {
-            LOG_ERROR("listen_tcp| ret=%d| fd=%d| error=%s|",
-                ret, fd, ERR_MSG());
+            LOG_ERROR("listen_tcp| ret=%d| fd=%d| ip=%s| port=%d| error=%s|",
+                ret, fd, param->m_ip, param->m_port, ERR_MSG());
             
             break; 
         } 
 
-        LOG_INFO("listen_tcp| fd=%d| msg=ok|", fd);
+        LOG_INFO("listen_tcp| fd=%d| ip=%s| port=%d| msg=ok|", 
+            fd, param->m_ip, param->m_port);
         
         return fd;
     } while (0);
@@ -77,7 +78,8 @@ Int32 connCli(Int32 fd, const TcpParam* param) {
     } else if (EINPROGRESS == errno) {
         return 1;
     } else {
-        LOG_ERROR("conn_fast| fd=%d| error=%s|", fd, ERR_MSG());
+        LOG_ERROR("conn_fast| fd=%d| ip=%s| port=%d| error=%s|", 
+            fd, param->m_ip, param->m_port, ERR_MSG());
         return -1;
     } 
 }

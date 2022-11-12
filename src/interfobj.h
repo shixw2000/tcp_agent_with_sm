@@ -53,7 +53,10 @@ public:
 
     /* return: 0-ok, 1-blocking write, other: error */
     virtual int writeFd(struct FdInfo* info) = 0;
+    
     virtual Int32 procMsg(struct FdInfo* info, struct MsgHdr* msg) = 0;
+
+    /* this function run in the dealer thread for resource free */
     virtual Void eof(struct FdInfo* info) = 0;
 };
 

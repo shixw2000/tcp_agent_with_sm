@@ -64,6 +64,7 @@ private:
     Int32 procCipherKeyAck(UserAccpt* usr, MsgHdr* msg); 
     Int32 procStartSess(UserAccpt* usr, MsgHdr* msg);
     Int32 procChildExit(UserAccpt* usr, MsgHdr* msg);
+    Int32 procHeartBeat(UserAccpt*, MsgHdr* msg);
     Int32 procEnd(UserAccpt* usr, MsgHdr* msg);
 
     Int32 parseAuthReq(UserAccpt* usr, MsgUserAuthReq* req);
@@ -91,7 +92,7 @@ public:
     }
     
     virtual int readFd(struct FdInfo* info);
-    virtual int writeFd(struct FdInfo* info);
+    virtual int writeFd(struct FdInfo* info);    
     virtual Int32 procMsg(FdInfo* info, MsgHdr* msg);
     virtual Void eof(struct FdInfo* info);
 
@@ -106,6 +107,7 @@ private:
     Int32 procAuthEnd(UserConn* usr, MsgHdr* msg);
     Int32 procUsrArrival(UserConn* usr, MsgHdr* msg);
     Int32 procChildExit(UserConn* usr, MsgHdr* msg);
+    Int32 procHeartBeat(UserConn*, MsgHdr* msg);
     Int32 procEnd(UserConn* usr, MsgHdr* msg);
 
     MsgHdr* creatAuthReq(UserConn* usr);

@@ -169,6 +169,8 @@ Int32 SockUsrAccpt::process(UserAccpt* usr, MsgHdr* msg) {
         || ENUM_MSG_CMD_TCP_PSEUDO == msg->m_cmd
         || ENUM_MSG_SYSTEM_STOP_SESS == msg->m_cmd) {
         ret = transfer2Sess(usr, msg);
+    } else if (ENUM_MSG_HEART_BEAT == msg->m_cmd) {
+        ret = procHeartBeat(usr, msg);
     } else if (ENUM_MSG_CMD_START_SESS == msg->m_cmd) {
         ret = procStartSess(usr, msg);
     } else if (ENUM_MSG_SYSTEM_CHILD_EXIT == msg->m_cmd) {
@@ -549,6 +551,8 @@ SessionConn* SockUsrAccpt::findSess(UserAccpt* usr, Uint32 sessID) {
 UserAccpt* SockUsrAccpt::setup(ListenerDirty* listener, int newfd) { 
     FdInfo* info = NULL;
     UserAccpt* usr = NULL;
+    int peer_port = 0;
+    Char peer_ip[DEF_IP_SIZE];
     
     /* enable read and write */
     info = m_mng->creatBase(newfd, TRUE, TRUE);
@@ -563,8 +567,13 @@ UserAccpt* SockUsrAccpt::setup(ListenerDirty* listener, int newfd) {
         /* ready for login protocol */
         usr->m_usr_status = ENUM_USER_WAIT_REQ; 
 
-        LOG_INFO("++++add_usr_accpt| fd=%d| ip=%s| port=%d| msg=ok|",
-            newfd, usr->m_param->m_ip, usr->m_param->m_port);
+        getPeerInfo(newfd, peer_ip, &peer_port);
+
+        LOG_INFO("++++add_usr_accpt| fd=%d| local_addr=%s:%d|"
+            " peer_addr=%s:%d| msg=ok|",
+            newfd, 
+            usr->m_param->m_ip, usr->m_param->m_port,
+            peer_ip, peer_port); 
 
         m_mng->addEvent(info, &usr->m_base);
         return usr;
@@ -572,6 +581,14 @@ UserAccpt* SockUsrAccpt::setup(ListenerDirty* listener, int newfd) {
         closeHd(newfd);
         return NULL;
     } 
+}
+
+Int32 SockUsrAccpt::procHeartBeat(UserAccpt* usr, MsgHdr* msg) {
+    LOG_DEBUG("proc_heart_beat| fd=%d| user_id=%u| msg=ok|",
+        usr->m_fdinfo->m_fd, usr->m_user_id);
+    
+    MsgCenter::free(msg);
+    return 0;
 }
 
 Int32 SockUsrAccpt::procChildExit(UserAccpt* usr, MsgHdr* msg) {
@@ -675,7 +692,7 @@ Int32 SockUsrConn::writeUsrConn(UserConn* usr) {
         /* begin to read msg */
         info->m_test_rd = TRUE;
         usr->m_connected = TRUE;
-
+        
         m_mng->notify(usr->m_fdinfo, ENUM_MSG_USR_SETUP_AUTH); 
         return 0;
     } else {
@@ -699,6 +716,8 @@ Int32 SockUsrConn::process(UserConn* usr, MsgHdr* msg) {
         || ENUM_MSG_SYSTEM_STOP_SESS == msg->m_cmd
         || ENUM_MSG_SESS_ARRIVAL == msg->m_cmd) {
         ret = transfer2Sess(usr, msg);
+    } else if (ENUM_MSG_HEART_BEAT == msg->m_cmd) {
+        ret = procHeartBeat(usr, msg);
     } else if (ENUM_MSG_SYSTEM_CHILD_EXIT == msg->m_cmd) {
         ret = procChildExit(usr, msg);
     } else if (ENUM_MSG_USR_EXCH_KEY == msg->m_cmd) {
@@ -1069,6 +1088,14 @@ UserConn* SockUsrConn::setup(const TcpParam* param) {
         
         return NULL;
     } 
+}
+
+Int32 SockUsrConn::procHeartBeat(UserConn* usr, MsgHdr* msg) {
+    LOG_DEBUG("proc_heart_beat| fd=%d| user_id=%u| msg=ok|",
+        usr->m_fdinfo->m_fd, usr->m_user_id);
+        
+    MsgCenter::free(msg);
+    return 0;
 }
 
 Int32 SockUsrConn::procChildExit(UserConn* usr, MsgHdr* msg) {

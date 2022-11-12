@@ -1,9 +1,14 @@
 #include"sockdealer.h"
 #include"datatype.h"
 #include"sockmng.h"
+#include"ticktimer.h"
 
 
-SockDealer::SockDealer(SockMng* mng): m_mng(mng) {
+SockDealer::SockDealer() {
+    m_mng = NULL;
+    m_timer = NULL;
+    INIT_TIMER_ELE(&m_minute_ele);
+    INIT_TIMER_ELE(&m_hour_ele);
 }
 
 SockDealer::~SockDealer() {
@@ -16,12 +21,23 @@ Int32 SockDealer::init() {
     if (0 != ret) {
         return ret;
     }
+
+    I_NEW(TickTimer, m_timer);
+    m_timer->setDealer(this);
     
     return ret;
 }
 
 Void SockDealer::finish() { 
+    if (NULL != m_timer) {
+        I_FREE(m_timer);
+    }
+    
     TaskPool::finish();
+}
+
+Void SockDealer::set(SockMng* mng) {
+    m_mng = mng;
 }
 
 unsigned int SockDealer::procTask(struct Task* task) {
@@ -41,4 +57,55 @@ void SockDealer::procTaskEnd(struct Task* task) {
     m_mng->endFd(info);
     return;
 }
+
+int SockDealer::setup() {
+    Int32 ret = 0;
+
+    ret = TaskPool::setup();
+    if (0 != ret) {
+        return ret;
+    }
+    
+    /* add a minutely timer */
+    addTimer(&m_minute_ele, ENUM_TIMER_TYPE_MINUTELY,
+        DEF_MINUTE_TICK_CNT);
+
+    /* add a hourly timer */
+    addTimer(&m_hour_ele, ENUM_TIMER_TYPE_HOURLY,
+        ENUM_TIMER_TYPE_HOURLY);
+
+    return 0;
+}
+
+void SockDealer::teardown() {
+    if (NULL != m_timer) {
+        m_timer->stop();
+    }
+
+    TaskPool::teardown();
+}
+
+Void SockDealer::doTimeout(struct TimerEle* ele) {
+    if (ENUM_TIMER_TYPE_MINUTELY== ele->m_type) {
+        LOG_DEBUG("minutely_task| msg=ok|");
+
+        updateTimer(ele);
+    } else if (ENUM_TIMER_TYPE_HOURLY== ele->m_type) {
+        updateTimer(ele);
+    } else {
+    }
+}
+
+Void SockDealer::doTick(Uint32 cnt) {
+    m_timer->tick(cnt); 
+}
+
+void SockDealer::addTimer(struct TimerEle* ele, 
+    Int32 type, Uint32 interval) {
+    ele->m_type = type;
+    ele->m_interval = interval;
+    
+    m_timer->addTimer(ele);
+}
+
 

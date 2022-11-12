@@ -1,6 +1,7 @@
 #include<string.h>
 #include"globaltype.h"
 #include"ticktimer.h"
+#include"datatype.h"
 
 
 TickTimer::TickTimer() {
@@ -24,12 +25,14 @@ Void TickTimer::stop() {
     for (int i=0; i<TV_1_SIZE; ++i) {
         hlist_for_each_entry_safe(ele, pos, n, &m_tv1[i], m_node) {
             hlist_del(pos);
+            --m_size;
         }
     }
 
     for (int i=0; i<TV_2_SIZE; ++i) {
         hlist_for_each_entry_safe(ele, pos, n, &m_tv2[i], m_node) {
             hlist_del(pos);
+            --m_size;
         }
     }
 }
@@ -116,4 +119,24 @@ Void TickTimer::doTimer(struct TimerEle* ele) {
     m_dealer->doTimeout(ele);
 }
 
+
+void INIT_TIMER_ELE(struct TimerEle* ele) {
+    INIT_HLIST_NODE(&ele->m_node);
+    ele->m_base = NULL;
+    ele->m_expires = 0;
+    ele->m_interval = 0;
+    ele->m_type = 0;
+}
+
+void updateTimer(struct TimerEle* ele) {
+    if (NULL != ele->m_base) {
+        ele->m_base->addTimer(ele);
+    }
+}
+
+void delTimer(struct TimerEle* ele) {
+    if (NULL != ele->m_base) {
+        ele->m_base->delTimer(ele);
+    }
+}
 

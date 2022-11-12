@@ -8,6 +8,8 @@
 
 struct FdInfo;
 struct NodeBase;
+struct MsgHdr;
+struct TimerEle;
 class Lock;
 class SockPoll;
 class SockDealer;
@@ -20,7 +22,7 @@ public:
     virtual Int32 init();
     virtual Void finish(); 
 
-    Void set(int fd, I_FdObj* obj);
+    Void set(I_FdObj* obj);
 
     virtual int start(const char* name);
     virtual void join();
@@ -28,6 +30,12 @@ public:
 
     virtual Int32 dispatch(FdInfo* info, MsgHdr* msg); 
     virtual Int32 sendMsg(FdInfo* info, MsgHdr* msg);
+    
+    Void doIoTick(Uint32 val);
+    Void doProcTick(Uint32 val);
+    void addIoTimer(struct TimerEle* ele, Int32 type, Uint32 interval);
+    void addProcTimer(struct TimerEle* ele, Int32 type, Uint32 interval);
+        
     virtual void procTaskEnd(struct Task* task);
     virtual unsigned int procTask(struct Task* task);
 
@@ -39,14 +47,14 @@ public:
     Void endFd(FdInfo* info); 
 
     Int32 notify(FdInfo* info, Uint16 cmd, Uint64 data = 0);
+    Int32 sendHeartBeat(FdInfo* info, Uint64 data = 0);
 
     Void addEvent(FdInfo* info, NodeBase* base);
 
     Bool lock(FdInfo* info);
     Bool unlock(FdInfo* info);
 
-    void closeMng(struct FdInfo* info);
-    
+    void closeMng(struct FdInfo* info); 
 
 private:
     Int32 procMsg(FdInfo* info, MsgHdr* msg); 
@@ -62,7 +70,7 @@ private:
     I_FdObj* m_obj;
     Lock* m_lock;
     SockPoll* m_poll;
-    SockDealer* m_dealer;
+    SockDealer* m_dealer; 
 };
 
 #endif

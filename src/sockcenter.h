@@ -6,7 +6,6 @@
 #include"listnode.h"
 #include"interfobj.h"
 #include"config.h"
-#include"ticktimer.h"
 
 
 class SockMng;
@@ -62,12 +61,6 @@ public:
     static EvpBase* creatEvp();
     static Void freeEvp(EvpBase* evp);
 
-    static EventData* newEventData();
-    static Void freeEventData(EventData* ev);
-    
-    static TimerData* newTimerData();
-    static Void freeTimerData(TimerData* timer);
-
     static ListenerTcp* newListenerTcp();
     static Void freeListenerTcp(ListenerTcp* listener);
 
@@ -92,7 +85,7 @@ private:
     I_FdObj* m_obj[ENUM_NODE_OBJ_MAX];
 };
 
-class SockCenter : public I_TimerDealer {
+class SockCenter {
 public:
     SockCenter();
 
@@ -147,10 +140,7 @@ public:
     unsigned int nextUsrId() {
         return ++m_last_user_id;
     }
-
-protected:
-    virtual Void doTimeout(struct TimerEle* ele);
-
+  
 private:
     list_head m_list_server;
     list_head m_list_client;
@@ -159,11 +149,7 @@ private:
     const Char* m_path;
     SockMng* m_mng; 
     Parser* m_parser;
-    FdObjFactory* m_fctry;
-    EventData* m_event_data;
-    TimerData* m_timer_data;
-    struct TimerEle m_minute_ele;
-    struct TimerEle m_hour_ele;
+    FdObjFactory* m_fctry; 
     
     struct SysBase m_base;
 };

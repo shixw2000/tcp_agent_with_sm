@@ -13,10 +13,9 @@
 
 SockMng::SockMng(int capacity) : m_capacity(capacity) {
     m_obj = NULL;
-    
     m_lock = NULL;
     m_poll = NULL;
-    m_dealer = NULL;
+    m_dealer = NULL; 
 }
 
 SockMng::~SockMng() {
@@ -36,18 +35,20 @@ Int32 SockMng::init() {
         return ret;
     }
 
-    I_NEW_2(SockPoll, m_poll, m_capacity, this);
+    I_NEW_1(SockPoll, m_poll, m_capacity);
     ret = m_poll->init();
     if (0 != ret) {
         return ret;
     }
 
-    I_NEW_1(SockDealer, m_dealer, this);
+    I_NEW(SockDealer, m_dealer);
     ret = m_dealer->init();
     if (0 != ret) {
         return ret;
     }
-    
+
+    m_poll->set(this); 
+    m_dealer->set(this); 
     return ret;
 }
 
@@ -65,18 +66,17 @@ Void SockMng::finish() {
     if (NULL != m_lock) {
         m_lock->finish();
         I_FREE(m_lock);
-    }
+    } 
 
     TaskPool::finish();
 }
 
-Void SockMng::set(int fd, I_FdObj* obj) {
-    m_poll->set(fd);
+Void SockMng::set(I_FdObj* obj) {
     m_obj = obj;
 }
 
 int SockMng::start(const char* name) {
-    int ret = 0;
+    int ret = 0; 
 
     ret = TaskPool::start(name);
     if (0 != ret) {
@@ -85,13 +85,16 @@ int SockMng::start(const char* name) {
 
     ret = m_dealer->start("dealer");
     if (0 != ret) {
+        TaskPool::stop();
         return -1;
     }
 
     ret = m_poll->start("poll");
     if (0 != ret) {
+        m_dealer->stop();
+        TaskPool::stop();
         return -1;
-    }
+    } 
 
     return 0;
 }
@@ -147,8 +150,7 @@ Void SockMng::addEvent(FdInfo* info, NodeBase* base) {
     
     m_poll->addTask(&info->m_wr_task, BIT_EVENT_NORM);
 
-    LOG_DEBUG("add_event| fd=%d| type=%d| data=%p|",
-        info->m_fd, info->m_fd_type, info->m_data);
+    LOG_DEBUG("add_event| fd=%d| type=%d|", info->m_fd, info->m_fd_type);
 }
 
 FdInfo* SockMng::creatBase(Int32 fd, Bool testRd, Bool testWr) {
@@ -194,13 +196,15 @@ Int32 SockMng::writeMsg(FdInfo* info) {
     }
 
     ret = m_obj->writeFd(info); 
+    
     return ret;
 }
 
 Int32 SockMng::readMsg(FdInfo* info) {
     Int32 ret = 0;
     
-    ret = m_obj->readFd(info);
+    ret = m_obj->readFd(info); 
+    
     return ret;
 }
 
@@ -313,5 +317,42 @@ Bool SockMng::unlock(FdInfo* info) {
     int idx = info->m_fd;
 
     return m_lock->unlock(idx);
+}
+
+Void SockMng::doIoTick(Uint32 val) {
+    m_poll->doTick(val);
+}
+
+Void SockMng::doProcTick(Uint32 val) {
+    m_dealer->doTick(val);
+}
+
+void SockMng::addIoTimer(struct TimerEle* ele, 
+    Int32 type, Uint32 interval) { 
+    m_poll->addTimer(ele, type, interval);
+}
+
+void SockMng::addProcTimer(struct TimerEle* ele, 
+    Int32 type, Uint32 interval) { 
+    m_dealer->addTimer(ele, type, interval);
+}
+
+Int32 SockMng::sendHeartBeat(FdInfo* info, Uint64 data) {
+    Int32 ret = 0;
+    MsgHdr* hdr = NULL;
+    MsgNotify* msg = NULL;
+
+    hdr = MsgCenter::creat<MsgNotify>(ENUM_MSG_HEART_BEAT);
+    msg = MsgCenter::cast<MsgNotify>(hdr);
+
+    msg->m_data = data;
+    
+    MsgCenter::addCrc(hdr);
+
+    LOG_DEBUG("send_heart_beat| fd=%d| fd_type=%d|", 
+        info->m_fd, info->m_fd_type);
+
+    ret = sendMsg(info, hdr);
+    return ret;
 }
 
