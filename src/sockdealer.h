@@ -20,6 +20,8 @@ public:
 
     Void set(SockMng* mng);
 
+    Void closeTask(FdInfo* info);
+
     virtual void procTaskEnd(struct Task* task);
     virtual unsigned int procTask(struct Task* task); 
 
@@ -30,6 +32,9 @@ public:
 protected: 
     virtual int setup();
     virtual void teardown();
+
+private:
+    Void stopHeartbeat(FdInfo* info);
 
 private:     
     SockMng* m_mng;

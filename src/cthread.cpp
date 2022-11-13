@@ -274,7 +274,7 @@ Void finishLog() {
 #endif
 
 Void setLogLevel(Int32 level) {
-    if (MAX_LOG_LEVEL > level) {
+    if (MAX_LOG_LEVEL > level && 0 <= level) {
         g_log_level = level;
     } else {
         g_log_level = 0;
@@ -345,5 +345,7 @@ Void initLib() {
 }
 
 Void finishLib() {
+    LOG_INFO("prog_stop| version=%s| msg=exit now|", DEF_BUILD_VER);
+    
     finishLog();
 }

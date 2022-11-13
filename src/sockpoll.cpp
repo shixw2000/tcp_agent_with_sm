@@ -115,7 +115,7 @@ Void SockPoll::resetFd(FdInfo* info) {
     INIT_TASK(&info->m_deal_task);
     INIT_TASK(&info->m_mng_task);
 
-    INIT_TIMER_ELE(&info->m_io_timer);
+    INIT_TIMER_ELE(&info->m_heartbeat_timer);
 
     INIT_LIST_NODE(&info->m_run_node);
     INIT_LIST_NODE(&info->m_rd_node);
@@ -132,7 +132,7 @@ int SockPoll::setup() {
     addTask(&m_event_fd->m_wr_task, BIT_EVENT_NORM); 
     addTask(&m_timer_fd->m_wr_task, BIT_EVENT_NORM); 
     
-    addTimer(&m_chk_flash_ele, ENUM_TIMER_CHK_FLASH, DEF_HEART_BEAT_INTERVAL);
+    addTimer(&m_chk_flash_ele, ENUM_TIMER_CHK_FLASH, DEF_CHK_FLASH_INTERVAL);
     return 0;
 }
 
@@ -334,7 +334,12 @@ void SockPoll::procTaskEnd(struct Task* task) {
         writeMsg(info);
     }
 
-    delTimer(&info->m_io_timer);
+    if (ENUM_NODE_SOCK_DATA_MIN < info->m_fd_type 
+        && ENUM_NODE_SOCK_DATA_MAX > info->m_fd_type) {
+
+        /* sock data */
+        shutdownHd(info->m_fd);
+    }
     
     delFlash(info);
 
@@ -348,7 +353,6 @@ Int32 SockPoll::writeMsg(FdInfo* info) {
 
     ret = m_mng->writeMsg(info);
 
-    //updateWrFlash(info); 
     return ret;
 }
 
@@ -358,7 +362,7 @@ Int32 SockPoll::readMsg(FdInfo* info) {
     
     ret = m_mng->readMsg(info); 
 
-    updateRdFlash(info); 
+    updateFlash(info); 
     return ret;
 }
 
@@ -408,35 +412,19 @@ Void SockPoll::flashTimeout() {
 
 /* just monitor user socket, */
 Void SockPoll::addFlash(FdInfo* info) {
-    if (ENUM_NODE_SOCK_RDWR < info->m_fd_type 
-        && ENUM_NODE_SOCK_MAX > info->m_fd_type) {
+    if (ENUM_NODE_SOCK_FLASH_MIN < info->m_fd_type 
+        && ENUM_NODE_SOCK_FLASH_MAX > info->m_fd_type) {
     
         info->m_last_time = m_timer->monoTick();
 
         /* go to tail of the que */
         list_add_back(&info->m_flash_node, &m_flash_timeout_que); 
-
-        /* start heart beat in poll thread for user socket */
-        addTimer(&info->m_io_timer, ENUM_TIMER_HEAR_BEAT, 
-            DEF_HEART_BEAT_INTERVAL);
     }
 }
 
-Void SockPoll::updateRdFlash(FdInfo* info) {
-    if (ENUM_NODE_SOCK_RDWR < info->m_fd_type 
-        && ENUM_NODE_SOCK_MAX > info->m_fd_type) {
-    
-        info->m_last_time = m_timer->monoTick();
-
-        /* go to tail of the que */
-        list_del(&info->m_flash_node, &m_flash_timeout_que);
-        list_add_back(&info->m_flash_node, &m_flash_timeout_que); 
-    }
-}
-
-Void SockPoll::updateWrFlash(FdInfo* info) {
-    if (ENUM_NODE_SOCK_MIN < info->m_fd_type 
-        && ENUM_NODE_SOCK_RDWR > info->m_fd_type) {
+Void SockPoll::updateFlash(FdInfo* info) {
+    if (ENUM_NODE_SOCK_FLASH_MIN < info->m_fd_type 
+        && ENUM_NODE_SOCK_FLASH_MAX > info->m_fd_type) {
     
         info->m_last_time = m_timer->monoTick();
 
@@ -447,11 +435,8 @@ Void SockPoll::updateWrFlash(FdInfo* info) {
 }
 
 Void SockPoll::delFlash(FdInfo* info) {
-    if (ENUM_NODE_SOCK_MIN < info->m_fd_type 
-        && ENUM_NODE_SOCK_MAX > info->m_fd_type) {
-
-        /* sock data */
-        shutdownHd(info->m_fd);
+    if (ENUM_NODE_SOCK_FLASH_MIN < info->m_fd_type 
+        && ENUM_NODE_SOCK_FLASH_MAX > info->m_fd_type) {
 
         /* exit que of flash */
         list_del(&info->m_flash_node, &m_flash_timeout_que);
@@ -495,12 +480,7 @@ Int32 SockPoll::creatTimer() {
 }
 
 Void SockPoll::doTimeout(struct TimerEle* ele) {
-    if (ENUM_TIMER_HEAR_BEAT == ele->m_type) {
-        FdInfo* info = list_entry(ele, FdInfo, m_io_timer);
-
-        m_mng->sendHeartBeat(info);
-        updateTimer(ele);
-    } else if (ENUM_TIMER_CHK_FLASH== ele->m_type) { 
+    if (ENUM_TIMER_CHK_FLASH== ele->m_type) { 
         flashTimeout();
 
         updateTimer(ele);

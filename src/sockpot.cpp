@@ -27,8 +27,9 @@ void initTime() {
     g_epoch_time = getSysTime();
     g_sys_time = to_sec(g_epoch_time);
     
-    LOG_INFO("prog_timer| sys_time=%llu.%llu|"
+    LOG_INFO("prog_start| version=%s| sys_time=%llu.%llu|"
         " mono_time=%u| msg=ok|",
+        DEF_BUILD_VER,
         to_sec(g_epoch_time), to_msec(g_epoch_time),
         g_mono_time);
 

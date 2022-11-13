@@ -366,7 +366,15 @@ Int32 Parser::analyseGlobal() {
         ret = getKeyStr(imap, DEF_KEY_PASSWD_NAME, m_config.m_passwd, 
             MAX_PIN_PASSWD_SIZE);
         if (0 != ret) {
-            LOG_ERROR("analyse_global| msg=invalid password|");
+            LOG_ERROR("analyse_global| key=%s| msg=invalid|",
+                DEF_KEY_PASSWD_NAME);
+            break;
+        } 
+
+        ret = getKeyInt(imap, DEF_KEY_LOG_LEVEL_NAME, &m_config.m_log_level);
+        if (0 != ret) {
+            LOG_ERROR("analyse_global| key=%s| msg=invalid|",
+                DEF_KEY_LOG_LEVEL_NAME);
             break;
         } 
     } while (0);

@@ -255,8 +255,7 @@ Void SockMng::dealMsg(FdInfo* info) {
                     /* normal deal */
                     ret = procMsg(info, msg);
                     if (0 != ret) {
-                        info->m_deal_err = TRUE;
-                        closePoll(info);
+                        m_dealer->closeTask(info);
                     }
                 } else {
                     MsgCenter::free(msg); 
@@ -265,8 +264,7 @@ Void SockMng::dealMsg(FdInfo* info) {
                 /* system cmd [0, 100] */
                 ret = procMsg(info, msg);
                 if (0 != ret && !info->m_deal_err) {
-                    info->m_deal_err = TRUE;
-                    closePoll(info);
+                    m_dealer->closeTask(info);
                 }
             } else {
                 MsgCenter::free(msg); 

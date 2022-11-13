@@ -635,6 +635,8 @@ Int32 SockCenter::init() {
             break;
         } 
 
+        setLogLevel(m_parser->getConf()->m_log_level);
+
         memset(&m_base, 0, sizeof(m_base));
         
         getRand(m_base.m_seid, DEF_SEID_SIZE);

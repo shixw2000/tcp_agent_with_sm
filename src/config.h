@@ -19,6 +19,7 @@ static const Char DEF_PEER_ADDR_PRE_KEY[] = "peer_addr_";
 
 static const Char DEF_SEC_GLOBAL_NAME[] = "global";
 static const Char DEF_KEY_PASSWD_NAME[] = "password";
+static const Char DEF_KEY_LOG_LEVEL_NAME[] = "log_level";
 
 
 typedef struct Address {
@@ -47,6 +48,7 @@ typedef struct AgentSrv {
 
 struct Config { 
     list_head m_agent_list;
+    Int32 m_log_level;
     Char m_passwd[MAX_PIN_PASSWD_SIZE];
 };
 

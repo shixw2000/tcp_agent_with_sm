@@ -456,6 +456,10 @@ Int32 SockUsrAccpt::procCipherKeyAck(UserAccpt* usr, MsgHdr* msg) {
 
         usr->m_usr_status = ENUM_USER_LOGIN;
 
+        /* if login success, then update it to send heartbeat */
+        m_mng->addProcTimer(&usr->m_fdinfo->m_heartbeat_timer,
+            ENUM_TIMER_HEAR_BEAT, DEF_HEART_BEAT_INTERVAL);
+
         LOG_DEBUG("procCipherKeyAck| user_id=%u| msg=key ack ok|",
             req->m_user_id);
 
@@ -566,6 +570,10 @@ UserAccpt* SockUsrAccpt::setup(ListenerDirty* listener, int newfd) {
 
         /* ready for login protocol */
         usr->m_usr_status = ENUM_USER_WAIT_REQ; 
+
+        /* start chk login in dealer thread for user socket */
+        m_mng->addProcTimer(&usr->m_fdinfo->m_heartbeat_timer,
+            ENUM_TIMER_CHK_LOGIN, DEF_CHK_LOGIN_INTERVAL);
 
         getPeerInfo(newfd, peer_ip, &peer_port);
 
@@ -968,6 +976,10 @@ Int32 SockUsrConn::procAuthEnd(UserConn* usr, MsgHdr* msg) {
 
         usr->m_usr_status = ENUM_USER_LOGIN;
 
+        /* if login success, then update it to send heartbeat */
+        m_mng->addProcTimer(&usr->m_fdinfo->m_heartbeat_timer,
+            ENUM_TIMER_HEAR_BEAT, DEF_HEART_BEAT_INTERVAL);
+
         LOG_DEBUG("procAuthEnd| user_id=%u| msg=auth end ok|",
             req->m_user_id);
 
@@ -1026,6 +1038,10 @@ Int32 SockUsrConn::procSetupAuth(UserConn* usr, MsgHdr* msg) {
         m_mng->sendMsg(usr->m_fdinfo, hdr); 
         
         usr->m_usr_status = ENUM_USER_AUTH_REQ;
+
+        /* start chk login in dealer thread for user socket */
+        m_mng->addProcTimer(&usr->m_fdinfo->m_heartbeat_timer,
+            ENUM_TIMER_CHK_LOGIN, DEF_CHK_LOGIN_INTERVAL);
 
         LOG_DEBUG("start_auth| user_id=%u| msg=start now|", usr->m_user_id); 
 

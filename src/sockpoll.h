@@ -54,8 +54,7 @@ private:
 
     Void flashTimeout();
     Void addFlash(FdInfo* info);
-    Void updateRdFlash(FdInfo* info);
-    Void updateWrFlash(FdInfo* info);
+    Void updateFlash(FdInfo* info);
     Void delFlash(FdInfo* info);
 
     Int32 creatTimer();

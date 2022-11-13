@@ -40,6 +40,11 @@ Void SockDealer::set(SockMng* mng) {
     m_mng = mng;
 }
 
+Void SockDealer::closeTask(FdInfo* info) {
+    info->m_deal_err = TRUE;
+    m_mng->closeMng(info);
+}
+
 unsigned int SockDealer::procTask(struct Task* task) {
     FdInfo* info = NULL;
 
@@ -54,6 +59,9 @@ void SockDealer::procTaskEnd(struct Task* task) {
 
     info = list_entry(task, FdInfo, m_deal_task);
 
+    /* del timer for heartbeat */
+    stopHeartbeat(info);
+    
     m_mng->endFd(info);
     return;
 }
@@ -86,10 +94,24 @@ void SockDealer::teardown() {
 }
 
 Void SockDealer::doTimeout(struct TimerEle* ele) {
-    if (ENUM_TIMER_TYPE_MINUTELY== ele->m_type) {
+    if (ENUM_TIMER_HEAR_BEAT == ele->m_type) {
+        FdInfo* info = list_entry(ele, FdInfo, m_heartbeat_timer);
+
+        m_mng->sendHeartBeat(info);
+        updateTimer(ele);
+    } else if (ENUM_TIMER_TYPE_MINUTELY == ele->m_type) {
         LOG_DEBUG("minutely_task| msg=ok|");
 
         updateTimer(ele);
+    } else if (ENUM_TIMER_CHK_LOGIN == ele->m_type) {
+        FdInfo* info = list_entry(ele, FdInfo, m_heartbeat_timer);
+
+        LOG_INFO("chk_login_timeout| fd=%d| type=%d|"
+            " interval=%u| msg=timeout and close|",
+            info->m_fd, info->m_fd_type, DEF_CHK_LOGIN_INTERVAL);
+
+        /* donot restart timer */
+        closeTask(info); 
     } else if (ENUM_TIMER_TYPE_HOURLY== ele->m_type) {
         updateTimer(ele);
     } else {
@@ -108,4 +130,12 @@ void SockDealer::addTimer(struct TimerEle* ele,
     m_timer->addTimer(ele);
 }
 
+Void SockDealer::stopHeartbeat(FdInfo* info) {
+    if (ENUM_NODE_SOCK_FLASH_MIN < info->m_fd_type 
+        && ENUM_NODE_SOCK_FLASH_MAX > info->m_fd_type) {
+
+        /* del timer for heartbeat */
+        delTimer(&info->m_heartbeat_timer);
+    }
+}
 
